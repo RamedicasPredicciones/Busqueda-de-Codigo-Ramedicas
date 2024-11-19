@@ -1,77 +1,88 @@
-import streamlit as st
+import gdown
 import pandas as pd
+from rapidfuzz import fuzz
 
-# Cargar archivos privados de manera segura
-@st.cache_data
-def load_private_files():
-    maestro_moleculas_df = pd.read_excel('Maestro_Moleculas.xlsx')
-    inventario_api_df = pd.read_excel('Inventario.xlsx')
-    return maestro_moleculas_df, inventario_api_df
+# Función para descargar el archivo de Google Drive
+def descargar_archivo_google_drive(link_drive, output_path):
+    gdown.download(link_drive, output_path, quiet=False)
 
-# Función para procesar el archivo de faltantes y generar el resultado
-def procesar_faltantes(faltantes_df, maestro_moleculas_df, inventario_api_df):
-    faltantes_df.columns = faltantes_df.columns.str.lower().str.strip()
-    maestro_moleculas_df.columns = maestro_moleculas_df.columns.str.lower().str.strip()
-    inventario_api_df.columns = inventario_api_df.columns.str.lower().str.strip()
+# Función para limpiar los nombres y estandarizarlos, eliminando detalles innecesarios
+def preprocess_name(name):
+    # Limpiar y estandarizar el nombre de los productos
+    name = name.lower()
+    name = name.replace("(", "").replace(")", "").replace("+", "").replace("/", " ").replace("-", " ").replace(",", "").replace(".", "")
+    # Eliminar detalles adicionales del empaque, envase, etc.
+    stopwords = ['blister', 'pvc', 'aluminio', 'caixa', 'recubiertas', 'tabletas', 'ampolla', 'por', 'empaquetadas']
+    name = ' '.join([word for word in name.split() if word not in stopwords])
+    return name
 
-    cur_faltantes = faltantes_df['cur'].unique()
-    codart_faltantes = faltantes_df['codart'].unique()
+# Función para homologar nombres con coincidencia flexible
+def homologar_nombres_flexibles(client_names_df, ramedicas_df):
+    # Preprocesar los nombres de los productos en Ramedicas (solo minúsculas y limpieza de caracteres)
+    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
-    alternativas_df = maestro_moleculas_df[maestro_moleculas_df['cur'].isin(cur_faltantes)]
+    # Preprocesar los nombres de los productos de clientes
+    client_names_df['processed_nombre_cliente'] = client_names_df['nombre'].apply(preprocess_name)
 
-    alternativas_inventario_df = pd.merge(
-        alternativas_df,
-        inventario_api_df,
-        on='cur',
-        how='inner',
-        suffixes=('_alternativas', '_inventario')
-    )
+    homologation_results = []
 
-    alternativas_disponibles_df = alternativas_inventario_df[
-        (alternativas_inventario_df['cantidad'] > 0) &
-        (alternativas_inventario_df['codart_alternativas'].isin(codart_faltantes))
+    # Buscar coincidencias flexibles
+    for client_name, processed_client_name in zip(client_names_df['nombre'], client_names_df['processed_nombre_cliente']):
+        best_match = None
+        highest_score = 0
+        
+        # Buscar coincidencias flexibles usando fuzzy matching
+        for idx, row in ramedicas_df.iterrows():
+            processed_nomart = row['processed_nomart']
+            score = fuzz.token_sort_ratio(processed_client_name, processed_nomart)  # Utilizamos token_sort_ratio para mayor flexibilidad
+
+            # Aplicar un umbral de puntuación para coincidencias relevantes
+            if score > highest_score and score > 80:  # Puedes ajustar este umbral
+                highest_score = score
+                best_match = {
+                    'nombre_cliente': client_name,
+                    'nombre_ramedicas': row['nomart'],
+                    'codart': row['codart'],
+                    'score': score
+                }
+
+        # Si no hay un buen match, dejar en blanco
+        if not best_match:
+            best_match = {
+                'nombre_cliente': client_name,
+                'nombre_ramedicas': None,
+                'codart': None,
+                'score': highest_score
+            }
+
+        homologation_results.append(best_match)
+
+    homologation_df = pd.DataFrame(homologation_results)
+    return homologation_df
+
+# Paso 1: Descargar los archivos desde Google Drive (si es necesario)
+link_drive = 'enlace_a_tu_archivo_de_google_drive'  # Reemplaza con tu enlace de Google Drive
+output_path = 'archivo_descargado.xlsx'  # Ruta de salida donde se guardará el archivo descargado
+descargar_archivo_google_drive(link_drive, output_path)
+
+# Paso 2: Leer los archivos descargados en DataFrame (esto depende de la estructura de tu archivo)
+# Supongamos que el archivo contiene columnas 'nombre' para el cliente y 'nomart' para los productos de Ramedicas
+
+# Leer los datos de ejemplo
+# Datos de ejemplo para el cliente
+client_names_data = {
+    'nombre': [
+        'SULFATO FERROSO TABLETAS RECUBIERTAS 300MG BLISTER PVC / ALUMINIO POR 10 TABLETAS EMPACADAS EN CAJA PLEGABLE POR 100 TABLETAS RECUBIERTAS',
+        'SULFATO FERROSO 300 MG TABLETA RECUBIERTA'
     ]
+}
+client_names_df = pd.DataFrame(client_names_data)
 
-    columnas_deseadas = [
-        'codart_alternativas', 'cur', 'opcion_inventario', 'codart_inventario', 'cantidad', 'bodega'
-    ]
-    columnas_presentes = [col for col in columnas_deseadas if col in alternativas_disponibles_df.columns]
-    alternativas_disponibles_df = alternativas_disponibles_df[columnas_presentes]
+# Leer el archivo descargado (esto debe ajustarse a la estructura de tu archivo)
+ramedicas_df = pd.read_excel(output_path)
 
-    alternativas_disponibles_df.rename(columns={
-        'codart_alternativas': 'codart_faltante',
-        'opcion_inventario': 'opcion_alternativa',
-        'codart_inventario': 'codart_alternativa'
-    }, inplace=True)
+# Homologar los nombres
+result_df = homologar_nombres_flexibles(client_names_df, ramedicas_df)
 
-    resultado_final_df = pd.merge(
-        faltantes_df[['cur', 'codart']],
-        alternativas_disponibles_df,
-        left_on=['cur', 'codart'],
-        right_on=['cur', 'codart_faltante'],
-        how='inner'
-    )
-
-    return resultado_final_df
-
-# Streamlit UI
-st.title('Generador de Alternativas de Faltantes')
-
-uploaded_file = st.file_uploader("Sube tu archivo de faltantes", type="xlsx")
-
-if uploaded_file:
-    faltantes_df = pd.read_excel(uploaded_file)
-    maestro_moleculas_df, inventario_api_df = load_private_files()
-
-    resultado_final_df = procesar_faltantes(faltantes_df, maestro_moleculas_df, inventario_api_df)
-
-    st.write("Archivo procesado correctamente.")
-    st.dataframe(resultado_final_df)
-
-    # Botón para descargar el archivo generado
-    st.download_button(
-        label="Descargar archivo de alternativas",
-        data=resultado_final_df.to_excel(index=False, engine='openpyxl'),
-        file_name='alternativas_disponibles.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+# Mostrar los resultados
+print(result_df)
