@@ -1,80 +1,110 @@
+import streamlit as st
 import pandas as pd
+from io import BytesIO
+from rapidfuzz import fuzz, process
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import streamlit as st
 
-# Función para preprocesar texto
-def preprocess_text(text):
-    text = text.lower()
-    text = text.replace("+", " ")
-    return text
+# Cargar datos de Ramedicas desde Google Drive
+@st.cache_data
+def load_ramedicas_data():
+    ramedicas_url = (
+        "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
+    )
+    ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
+    return ramedicas_df[['codart', 'nomart']]
 
-# Función para buscar coincidencias
-def find_best_match(client_name, ramedicas_df, vectorizer):
-    client_name_vector = vectorizer.transform([client_name])
-    ramedicas_vectors = vectorizer.transform(ramedicas_df['nomart'])
-    
-    similarities = cosine_similarity(client_name_vector, ramedicas_vectors).flatten()
-    best_index = similarities.argmax()
-    best_score = similarities[best_index]
-    return ramedicas_df.iloc[best_index], best_score
+# Preprocesar nombres
+def preprocess_name(name):
+    replacements = {
+        "(": "",
+        ")": "",
+        "+": "",
+        "/": " ",
+        "-": " ",
+        ",": "",
+        ";": "",
+        ".": "",
+        "mg": " mg",
+        "ml": " ml",
+        "capsula": " tableta",  # Unificar terminología
+        "tableta": " tableta",
+        "parches": " parche",
+        "parche": " parche"
+    }
+    for old, new in replacements.items():
+        name = name.lower().replace(old, new)
+    stopwords = {"de", "el", "la", "los", "las", "un", "una", "y", "en", "por"}
+    words = [word for word in name.split() if word not in stopwords]
+    return " ".join(sorted(words))  # Ordenar alfabéticamente para mejorar la comparación
 
-# Función para homologar nombres
-def homologar_nombres_advanced(client_names_df, ramedicas_df):
-    ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_text)
-    client_names_df['nombre_processed'] = client_names_df['nombre'].apply(preprocess_text)
-    
-    vectorizer = TfidfVectorizer(analyzer='word')
-    vectorizer.fit(pd.concat([ramedicas_df['nomart_processed'], client_names_df['nombre_processed']]))
-    
-    feedback = pd.DataFrame(columns=[
-        'nombre_cliente', 'nombre_ramedicas', 'codart', 'score',
-        'coincidencias_clave', 'terminos_faltantes'
-    ])
-    
-    for index, row in client_names_df.iterrows():
-        client_name = row['nombre_processed']
-        client_numbers = set(filter(str.isdigit, client_name.split()))
-        
-        match_row, score = find_best_match(client_name, ramedicas_df, vectorizer)
-        match_numbers = set(filter(str.isdigit, match_row['nomart_processed'].split()))
-        equivalent_count = len(client_numbers.intersection(match_numbers))
-        
-        new_row = pd.DataFrame([{
-            'nombre_cliente': row['nombre'],
-            'nombre_ramedicas': match_row['nomart'],
-            'codart': match_row['codart'],
-            'score': score,
-            'coincidencias_clave': ", ".join(client_numbers.intersection(match_numbers)),
-            'terminos_faltantes': None if equivalent_count > 0 else "Términos principales no coinciden"
-        }])
-        
-        feedback = pd.concat([feedback, new_row], ignore_index=True)
-    
-    return feedback
+# Buscar la mejor coincidencia
+def find_best_match(client_name, ramedicas_df):
+    client_name_processed = preprocess_name(client_name)
+    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
-# App Streamlit
-st.title("Búsqueda de códigos Ramedicas")
+    matches = process.extract(
+        client_name_processed,
+        ramedicas_df['processed_nomart'],
+        scorer=fuzz.token_sort_ratio,
+        limit=5
+    )
 
-uploaded_client_file = st.file_uploader("Sube el archivo de nombres del cliente (CSV)", type=["csv"])
-uploaded_ramedicas_file = st.file_uploader("Sube la base de datos Ramedicas (CSV)", type=["csv"])
+    best_match = None
+    highest_score = 0
 
-if uploaded_client_file and uploaded_ramedicas_file:
-    client_names_df = pd.read_csv(uploaded_client_file)
-    ramedicas_df = pd.read_csv(uploaded_ramedicas_file)
-    
-    if 'nombre' not in client_names_df.columns or 'nomart' not in ramedicas_df.columns:
-        st.error("Archivos incorrectos. Asegúrate de incluir las columnas 'nombre' en el archivo del cliente y 'nomart' en la base de datos.")
+    for match, score, idx in matches:
+        candidate_row = ramedicas_df.iloc[idx]
+        if score > highest_score:
+            highest_score = score
+            best_match = {
+                'nombre_cliente': client_name,
+                'nombre_ramedicas': candidate_row['nomart'],
+                'codart': candidate_row['codart'],
+                'score': score
+            }
+    return best_match
+
+# Interfaz de Streamlit
+st.title("Homologador de Productos - Ramedicas")
+
+if st.button("Actualizar base de datos"):
+    st.cache_data.clear()
+
+uploaded_file = st.file_uploader("Sube tu archivo con los nombres de los clientes", type="xlsx")
+
+if uploaded_file:
+    client_names_df = pd.read_excel(uploaded_file)
+    if 'nombre' not in client_names_df.columns:
+        st.error("El archivo debe contener una columna llamada 'nombre'.")
     else:
-        feedback = homologar_nombres_advanced(client_names_df, ramedicas_df)
-        st.write("Resultados de la homologación:")
-        st.dataframe(feedback)
-        
-        # Descarga de resultados
-        csv = feedback.to_csv(index=False).encode('utf-8')
+        ramedicas_df = load_ramedicas_data()
+        results = []
+        for client_name in client_names_df['nombre']:
+            match = find_best_match(client_name, ramedicas_df)
+            if match:
+                results.append(match)
+            else:
+                results.append({
+                    'nombre_cliente': client_name,
+                    'nombre_ramedicas': None,
+                    'codart': None,
+                    'score': 0
+                })
+
+        results_df = pd.DataFrame(results)
+        st.write("Resultados de homologación:")
+        st.dataframe(results_df)
+
+        def to_excel(df):
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                df.to_excel(writer, index=False, sheet_name="Homologación")
+            return output.getvalue()
+
         st.download_button(
-            label="Descargar resultados",
-            data=csv,
-            file_name="homologacion_resultados.csv",
-            mime="text/csv",
+            label="Descargar archivo con resultados",
+            data=to_excel(results_df),
+            file_name="homologacion_productos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
