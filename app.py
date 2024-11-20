@@ -43,11 +43,11 @@ def preprocess_name(name):
 # Buscar la mejor coincidencia
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
-    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
     # Buscar coincidencia exacta primero en 'nomart'
-    if client_name_processed in ramedicas_df['processed_nomart'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
+    exact_match = ramedicas_df[ramedicas_df['nomart'].str.contains(client_name, case=False, na=False)]
+    if not exact_match.empty:
+        exact_match = exact_match.iloc[0]  # Tomar el primer resultado que coincida
         return {
             'nombre_cliente': client_name,
             'nombre_ramedicas': exact_match['nomart'],
@@ -56,9 +56,9 @@ def find_best_match(client_name, ramedicas_df):
         }
 
     # Si no hay coincidencia exacta en 'nomart', entonces buscar en 'n_comercial'
-    ramedicas_df['processed_n_comercial'] = ramedicas_df['n_comercial'].apply(preprocess_name)
-    if client_name_processed in ramedicas_df['processed_n_comercial'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_n_comercial'] == client_name_processed].iloc[0]
+    exact_match = ramedicas_df[ramedicas_df['n_comercial'].str.contains(client_name, case=False, na=False)]
+    if not exact_match.empty:
+        exact_match = exact_match.iloc[0]  # Tomar el primer resultado que coincida
         return {
             'nombre_cliente': client_name,
             'nombre_ramedicas': exact_match['nomart'],
@@ -69,7 +69,7 @@ def find_best_match(client_name, ramedicas_df):
     # Si no hay coincidencia exacta en 'nomart' ni en 'n_comercial', buscar la mejor aproximación en n_comercial
     matches = process.extract(
         client_name_processed,
-        ramedicas_df['processed_n_comercial'],
+        ramedicas_df['n_comercial'],
         scorer=fuzz.token_set_ratio,
         limit=5
     )
