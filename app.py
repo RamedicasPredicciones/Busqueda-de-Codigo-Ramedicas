@@ -47,7 +47,8 @@ def find_best_match(client_name, ramedicas_df):
             highest_score = score
             best_match = ramedicas_df.iloc[idx]
     
-    if best_match:
+    # Aquí verificamos si encontramos un 'best_match' válido
+    if best_match is not None:
         return {
             'nombre_cliente': client_name,
             'nombre_ramedicas': best_match['nomart'],
@@ -98,4 +99,3 @@ if uploaded_file:
             file_name="homologacion_productos.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
