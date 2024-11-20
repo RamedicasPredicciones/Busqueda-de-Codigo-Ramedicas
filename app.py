@@ -10,13 +10,10 @@ def load_ramedicas_data():
         "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
     )
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-    return ramedicas_df[['codart', 'nomart', 'n_comercial']]
+    return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres
 def preprocess_name(name):
-    if pd.isna(name):  # Verifica si el nombre es NaN (nulo)
-        return ""
-    
     replacements = {
         "(": "",
         ")": "",
@@ -43,11 +40,11 @@ def preprocess_name(name):
 # Buscar la mejor coincidencia
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
+    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
-    # Buscar coincidencia exacta primero en 'nomart'
-    exact_match = ramedicas_df[ramedicas_df['nomart'].str.contains(client_name, case=False, na=False)]
-    if not exact_match.empty:
-        exact_match = exact_match.iloc[0]  # Tomar el primer resultado que coincida
+    # Buscar coincidencia exacta primero
+    if client_name_processed in ramedicas_df['processed_nomart'].values:
+        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
         return {
             'nombre_cliente': client_name,
             'nombre_ramedicas': exact_match['nomart'],
@@ -55,23 +52,15 @@ def find_best_match(client_name, ramedicas_df):
             'score': 100
         }
 
-    # Si no hay coincidencia exacta en 'nomart', entonces buscar en 'n_comercial'
-    exact_match = ramedicas_df[ramedicas_df['n_comercial'].str.contains(client_name, case=False, na=False)]
-    if not exact_match.empty:
-        exact_match = exact_match.iloc[0]  # Tomar el primer resultado que coincida
-        return {
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': exact_match['nomart'],
-            'codart': exact_match['codart'],
-            'score': 100
-        }
+    # Separar palabras del nombre del cliente para buscar todos los términos
+    client_terms = set(client_name_processed.split())
 
-    # Si no hay coincidencia exacta en 'nomart' ni en 'n_comercial', buscar la mejor aproximación en n_comercial
+    # Buscar mejores coincidencias con `process.extract`
     matches = process.extract(
         client_name_processed,
-        ramedicas_df['n_comercial'],
+        ramedicas_df['processed_nomart'],
         scorer=fuzz.token_set_ratio,
-        limit=5
+        limit=10  # Expandir el número de posibles coincidencias
     )
 
     best_match = None
@@ -79,14 +68,28 @@ def find_best_match(client_name, ramedicas_df):
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        if score > highest_score:
-            highest_score = score
-            best_match = {
-                'nombre_cliente': client_name,
-                'nombre_ramedicas': candidate_row['nomart'],
-                'codart': candidate_row['codart'],
-                'score': score
-            }
+        candidate_terms = set(match.split())
+
+        # Verificar que todos los términos del cliente estén en el candidato
+        if client_terms.issubset(candidate_terms):
+            if score > highest_score:
+                highest_score = score
+                best_match = {
+                    'nombre_cliente': client_name,
+                    'nombre_ramedicas': candidate_row['nomart'],
+                    'codart': candidate_row['codart'],
+                    'score': score
+                }
+
+    # Si no hay coincidencias completas, devolver la mejor aproximación
+    if not best_match and matches:
+        best_match = {
+            'nombre_cliente': client_name,
+            'nombre_ramedicas': matches[0][0],
+            'codart': ramedicas_df.iloc[matches[0][2]]['codart'],
+            'score': matches[0][1]
+        }
+
     return best_match
 
 # Interfaz de Streamlit
