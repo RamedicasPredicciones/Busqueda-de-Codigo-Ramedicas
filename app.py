@@ -118,35 +118,48 @@ st.title("Homologador de Productos - Ramedicas")  # El título de la aplicación
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()  # Limpiar el caché para cargar los datos de nuevo
 
-# Opción para ingresar un nombre de cliente manualmente
-client_name_manual = st.text_input("Ingresa el nombre del cliente (si solo deseas buscar uno):")
+# Opción para ingresar uno o más nombres de clientes manualmente
+client_names_manual = st.text_area("Ingresa los nombres de los clientes, separados por comas o saltos de línea:")
 
 # Opción para subir un archivo con los nombres de los clientes
 uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los clientes", type="xlsx")
 
-# Procesar si el usuario ha ingresado un nombre manual
-if client_name_manual:
+# Procesar si el usuario ha ingresado varios nombres manualmente
+if client_names_manual:
+    # Dividir los nombres en una lista
+    client_names_list = [name.strip() for name in client_names_manual.splitlines()]
+
     # Cargar los datos de productos de Ramedicas
     ramedicas_df = load_ramedicas_data()
 
-    # Buscar la mejor coincidencia
-    match = find_best_match(client_name_manual, ramedicas_df)
+    # Lista para almacenar los resultados de la homologación
+    results = []
 
-    # Mostrar los resultados
-    if match:
-        st.write(f"**Nombre cliente**: {match['nombre_cliente']}")
-        st.write(f"**Nombre Ramedicas**: {match['nombre_ramedicas']}")
-        st.write(f"**Código Artículo**: {match['codart']}")
-        st.write(f"**Score**: {match['score']}")
+    # Se crea la iteración sobre cada nombre de cliente para encontrar la mejor coincidencia
+    for client_name in client_names_list:
+        match = find_best_match(client_name, ramedicas_df)
+        if match:
+            results.append(match)
+        else:
+            results.append({
+                'nombre_cliente': client_name,
+                'nombre_ramedicas': None,
+                'codart': None,
+                'score': 0
+            })
 
-        # Crear el DataFrame para la descarga
-        results_df = pd.DataFrame([match])
-        st.download_button(
-            label="Descargar archivo con resultado",
-            data=to_excel(results_df),
-            file_name="resultado_homologacion.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    # Crear un DataFrame con los resultados
+    results_df = pd.DataFrame(results)
+    st.write("Resultados de homologación:")
+    st.dataframe(results_df)  # Mostrar los resultados en una tabla
+
+    # Botón para descargar los resultados como un archivo Excel
+    st.download_button(
+        label="Descargar archivo con resultados",
+        data=to_excel(results_df),
+        file_name="homologacion_productos.xlsx",  # Nombre del archivo de descarga
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Tipo de archivo excel 
+    )
 
 # Procesar si el usuario sube un archivo
 if uploaded_file:
