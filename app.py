@@ -38,10 +38,21 @@ def preprocess_name(name):
     return " ".join(sorted(words))  # Ordenar alfabéticamente para mejorar la comparación
 
 # Buscar la mejor coincidencia
-def find_best_match(client_name, ramedicas_df, score_threshold=75):
+def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
+    # Buscar coincidencia exacta primero
+    if client_name_processed in ramedicas_df['processed_nomart'].values:
+        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
+        return {
+            'nombre_cliente': client_name,
+            'nombre_ramedicas': exact_match['nomart'],
+            'codart': exact_match['codart'],
+            'score': 100
+        }
+
+    # Si no hay coincidencia exacta, buscar la mejor aproximación
     matches = process.extract(
         client_name_processed,
         ramedicas_df['processed_nomart'],
@@ -54,7 +65,7 @@ def find_best_match(client_name, ramedicas_df, score_threshold=75):
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        if score > highest_score and score >= score_threshold:
+        if score > highest_score:
             highest_score = score
             best_match = {
                 'nombre_cliente': client_name,
@@ -107,3 +118,4 @@ if uploaded_file:
             file_name="homologacion_productos.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
