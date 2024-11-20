@@ -52,12 +52,15 @@ def find_best_match(client_name, ramedicas_df):
             'score': 100
         }
 
-    # Si no hay coincidencia exacta, buscar la mejor aproximación
+    # Separar palabras del nombre del cliente para buscar todos los términos
+    client_terms = set(client_name_processed.split())
+
+    # Buscar mejores coincidencias con `process.extract`
     matches = process.extract(
         client_name_processed,
         ramedicas_df['processed_nomart'],
         scorer=fuzz.token_set_ratio,
-        limit=5
+        limit=10  # Expandir el número de posibles coincidencias
     )
 
     best_match = None
@@ -65,14 +68,28 @@ def find_best_match(client_name, ramedicas_df):
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        if score > highest_score:
-            highest_score = score
-            best_match = {
-                'nombre_cliente': client_name,
-                'nombre_ramedicas': candidate_row['nomart'],
-                'codart': candidate_row['codart'],
-                'score': score
-            }
+        candidate_terms = set(match.split())
+
+        # Verificar que todos los términos del cliente estén en el candidato
+        if client_terms.issubset(candidate_terms):
+            if score > highest_score:
+                highest_score = score
+                best_match = {
+                    'nombre_cliente': client_name,
+                    'nombre_ramedicas': candidate_row['nomart'],
+                    'codart': candidate_row['codart'],
+                    'score': score
+                }
+
+    # Si no hay coincidencias completas, devolver la mejor aproximación
+    if not best_match and matches:
+        best_match = {
+            'nombre_cliente': client_name,
+            'nombre_ramedicas': matches[0][0],
+            'codart': ramedicas_df.iloc[matches[0][2]]['codart'],
+            'score': matches[0][1]
+        }
+
     return best_match
 
 # Interfaz de Streamlit
@@ -118,4 +135,3 @@ if uploaded_file:
             file_name="homologacion_productos.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
