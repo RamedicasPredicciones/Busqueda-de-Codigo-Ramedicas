@@ -84,7 +84,7 @@ def find_best_match(client_name, ramedicas_df):
 
         # Verificar que todos los términos del cliente estén presentes en la coincidencia
         if client_terms.issubset(candidate_terms):
-            if score > highest_score:  # Si la puntuación es mejor que la anterior, actualizamos
+            if score > highest_score:  # Si la puntuación es mejor que la anterior, se actualiza
                 highest_score = score
                 best_match = {
                     'nombre_cliente': client_name,
@@ -93,7 +93,7 @@ def find_best_match(client_name, ramedicas_df):
                     'score': score
                 }
 
-    # Si no hay coincidencias completas, devolver la mejor aproximación
+    # Si no hay coincidencias completas, se devuelve la mejor aproximación
     if not best_match and matches:
         best_match = {
             'nombre_cliente': client_name,
@@ -105,15 +105,43 @@ def find_best_match(client_name, ramedicas_df):
     return best_match
 
 # Interfaz de Streamlit
-st.title("Homologador de Productos - Ramedicas")  # Título de la aplicación
+st.title("Homologador de Productos - Ramedicas")  # El título de la aplicación
 
 # Opción para actualizar la base de datos y limpiar el caché
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()  # Limpiar el caché para cargar los datos de nuevo
 
-# Subir archivo con los nombres de los clientes
-uploaded_file = st.file_uploader("Sube tu archivo con los nombres de los clientes", type="xlsx")
+# Opción para ingresar un nombre de cliente manualmente
+client_name_manual = st.text_input("Ingresa el nombre del cliente (si solo deseas buscar uno):")
 
+# Opción para subir un archivo con los nombres de los clientes
+uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los clientes", type="xlsx")
+
+# Procesar si el usuario ha ingresado un nombre manual
+if client_name_manual:
+    # Cargar los datos de productos de Ramedicas
+    ramedicas_df = load_ramedicas_data()
+
+    # Buscar la mejor coincidencia
+    match = find_best_match(client_name_manual, ramedicas_df)
+
+    # Mostrar los resultados
+    if match:
+        st.write(f"**Nombre cliente**: {match['nombre_cliente']}")
+        st.write(f"**Nombre Ramedicas**: {match['nombre_ramedicas']}")
+        st.write(f"**Código Artículo**: {match['codart']}")
+        st.write(f"**Score**: {match['score']}")
+
+        # Crear el DataFrame para la descarga
+        results_df = pd.DataFrame([match])
+        st.download_button(
+            label="Descargar archivo con resultado",
+            data=to_excel(results_df),
+            file_name="resultado_homologacion.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+# Procesar si el usuario sube un archivo
 if uploaded_file:
     # Leer el archivo subido con los nombres de los clientes
     client_names_df = pd.read_excel(uploaded_file)
@@ -127,8 +155,8 @@ if uploaded_file:
         
         # Lista para almacenar los resultados de la homologación
         results = []
-        
-        # Iterar sobre cada nombre de cliente para encontrar la mejor coincidencia
+
+        # Se crea la iteración sobre cada nombre de cliente para encontrar la mejor coincidencia
         for client_name in client_names_df['nombre']:
             match = find_best_match(client_name, ramedicas_df)
             if match:
@@ -158,5 +186,5 @@ if uploaded_file:
             label="Descargar archivo con resultados",
             data=to_excel(results_df),
             file_name="homologacion_productos.xlsx",  # Nombre del archivo de descarga
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Tipo de archivo
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Tipo de archivo excel 
         )
