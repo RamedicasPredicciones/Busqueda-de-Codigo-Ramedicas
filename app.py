@@ -104,6 +104,13 @@ def find_best_match(client_name, ramedicas_df):
 
     return best_match
 
+# Función para convertir el DataFrame a un archivo Excel
+def to_excel(df):
+    output = BytesIO()  # Usamos BytesIO para manejar el archivo en memoria
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Homologación")  # Escribir el DataFrame al archivo
+    return output.getvalue()
+
 # Interfaz de Streamlit
 st.title("Homologador de Productos - Ramedicas")  # El título de la aplicación
 
@@ -173,13 +180,6 @@ if uploaded_file:
         results_df = pd.DataFrame(results)
         st.write("Resultados de homologación:")
         st.dataframe(results_df)  # Mostrar los resultados en una tabla
-
-        # Función para convertir el DataFrame a un archivo Excel
-        def to_excel(df):
-            output = BytesIO()  # Usamos BytesIO para manejar el archivo en memoria
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Homologación")  # Escribir el DataFrame al archivo
-            return output.getvalue()
 
         # Botón para descargar los resultados como un archivo Excel
         st.download_button(
