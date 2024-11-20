@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from rapidfuzz import fuzz, process
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
@@ -19,7 +17,7 @@ def preprocess_name(name):
     replacements = {
         "(": "",
         ")": "",
-        "+": "",
+        "+": " ",
         "/": " ",
         "-": " ",
         ",": "",
@@ -28,6 +26,7 @@ def preprocess_name(name):
         "mg": " mg",
         "ml": " ml",
         "capsula": " tableta",  # Unificar terminología
+        "tablet": " tableta",
         "tableta": " tableta",
         "parches": " parche",
         "parche": " parche"
@@ -39,14 +38,14 @@ def preprocess_name(name):
     return " ".join(sorted(words))  # Ordenar alfabéticamente para mejorar la comparación
 
 # Buscar la mejor coincidencia
-def find_best_match(client_name, ramedicas_df):
+def find_best_match(client_name, ramedicas_df, score_threshold=75):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
     matches = process.extract(
         client_name_processed,
         ramedicas_df['processed_nomart'],
-        scorer=fuzz.token_sort_ratio,
+        scorer=fuzz.token_set_ratio,
         limit=5
     )
 
@@ -55,7 +54,7 @@ def find_best_match(client_name, ramedicas_df):
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        if score > highest_score:
+        if score > highest_score and score >= score_threshold:
             highest_score = score
             best_match = {
                 'nombre_cliente': client_name,
