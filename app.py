@@ -77,13 +77,14 @@ def to_excel(df):
     return output.getvalue()
 
 # Interfaz de Streamlit
-st.title("**RAMEDICAS S.A.S.** - Homologador de Productos")
 st.markdown(
     """
-    # **RAMEDICAS S.A.S.**
-    ### Homologador de Productos de Ramedicas  
+    <h1 style="text-align: center; color: orange;">RAMEDICAS S.A.S.</h1>
+    <h3 style="text-align: center;">Homologador de Productos</h3>
+    <p style="text-align: center;">
     Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
-    """
+    </p>
+    """, unsafe_allow_html=True
 )
 
 if st.button("Actualizar base de datos"):
