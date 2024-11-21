@@ -110,4 +110,4 @@ if uploaded_file:
         results = [find_best_match(name, ramedicas_df) for name in client_names_df['nombre']]
         results_df = pd.DataFrame(results)
         st.dataframe(results_df)
-        st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx") 
+        st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
