@@ -24,29 +24,30 @@ def preprocess_name(name):
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
 
-def find_best_match(client_name, ramedicas_df):
+def find_best_match(client_name, ramedicas_df, similarity_threshold=80):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nombre'] = ramedicas_df['nombre'].apply(preprocess_name)  # Cambié 'nomart' a 'nombre'
 
+    # Intentar encontrar una coincidencia exacta
     if client_name_processed in ramedicas_df['processed_nombre'].values:
         exact_match = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed].iloc[0]
         return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nombre'], 'codart': exact_match['codart'], 'score': 100}
 
-    client_terms = set(client_name_processed.split())
-    matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_set_ratio, limit=10)
+    # Si no hay coincidencia exacta, buscar la mejor coincidencia aproximada
+    matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_sort_ratio, limit=10)
+    
+    # Filtrar solo las coincidencias que tienen un puntaje por encima del umbral de similitud
     best_match = None
-    highest_score = 0
-
     for match, score, idx in matches:
-        candidate_row = ramedicas_df.iloc[idx]
-        candidate_terms = set(match.split())
-        if client_terms.issubset(candidate_terms):
-            if score > highest_score:
-                highest_score = score
-                best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nombre'], 'codart': candidate_row['codart'], 'score': score}
+        if score >= similarity_threshold:  # Filtrar por un puntaje mínimo de similitud
+            candidate_row = ramedicas_df.iloc[idx]
+            best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nombre'], 'codart': candidate_row['codart'], 'score': score}
+            break  # Detenerse después de encontrar la mejor coincidencia dentro del umbral
 
-    if not best_match and matches:
-        best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': matches[0][0], 'codart': ramedicas_df.iloc[matches[0][2]]['codart'], 'score': matches[0][1]}
+    # Si no se encuentra una coincidencia que cumpla el umbral, no mostrar ningún resultado
+    if not best_match:
+        return {'nombre_cliente': client_name, 'nombre_ramedicas': "Sin coincidencias precisas", 'codart': "", 'score': 0}
+
     return best_match
 
 def to_excel(df):
