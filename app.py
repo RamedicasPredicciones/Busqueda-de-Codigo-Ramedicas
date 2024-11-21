@@ -6,13 +6,12 @@ from rapidfuzz import fuzz, process
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
-    ramedicas_url = ("https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1")
+    ramedicas_url = "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
     return ramedicas_df[['codart', 'nomart']]
 
-# Preprocesar nombres
+# Preprocesar nombres, manteniendo unidades y palabras clave
 def preprocess_name(name): 
-    # Reemplazos para hacer que los nombres sean más comparables, pero sin perder la estructura
     replacements = {
         "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "", ".": "",
         "mg": " mg", "ml": " ml", "capsula": " capsulas", "tablet": " tableta",
@@ -21,11 +20,11 @@ def preprocess_name(name):
     for old, new in replacements.items():
         name = name.lower().replace(old, new)
     
-    # Evitar eliminar palabras clave como "mg", "ml" o "jarabe"
     stopwords = {"de", "el", "la", "los", "las", "un", "una", "y", "en", "por"}
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
 
+# Función para encontrar la mejor coincidencia
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
@@ -35,7 +34,7 @@ def find_best_match(client_name, ramedicas_df):
         exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
         return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'score': 100}
 
-    # Utilizar fuzz.token_sort_ratio para evaluar las coincidencias mejor considerando el orden de las palabras
+    # Utilizar fuzz.token_sort_ratio para evaluar mejor las coincidencias
     client_terms = set(client_name_processed.split())
     matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_sort_ratio, limit=10)
     best_match = None
@@ -53,6 +52,7 @@ def find_best_match(client_name, ramedicas_df):
         best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': matches[0][0], 'codart': ramedicas_df.iloc[matches[0][2]]['codart'], 'score': matches[0][1]}
     return best_match
 
+# Función para convertir los resultados a un archivo Excel
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
