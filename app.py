@@ -73,23 +73,13 @@ st.markdown(
         margin-bottom: 40px;
         color: #34495E;
     }
-    .logo {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        width: 150px;
-    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Título y logo
+# Título
 st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Código Ramédicas - Homologador de Productos</div>', unsafe_allow_html=True)
-
-# Mostrar el logo
-st.image("https://raw.githubusercontent.com/RamedicasPredicciones/Busqueda-de-Codigo-Ramedicas/main/Logo%20Ramedicas.png", use_column_width=False, width=200, output_format="PNG", caption="Ramédicas SAS", classes="logo")
 
 # Botón para actualizar la base de datos
 if st.button("Actualizar base de datos"):
