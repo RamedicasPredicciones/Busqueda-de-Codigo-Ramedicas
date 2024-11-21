@@ -6,12 +6,11 @@ from rapidfuzz import fuzz, process
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
-    
-ramedicas_url = (
-    "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
-)
-ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-return ramedicas_df[['codart', 'nombre']]
+    ramedicas_url = (
+        "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
+    )
+    ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
+    return ramedicas_df[['codart', 'nombre']]  # Cambié 'nomart' a 'nombre'
 
 # Preprocesar nombres
 def preprocess_name(name): 
@@ -27,14 +26,14 @@ def preprocess_name(name):
 
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
-    ramedicas_df['processed_nomart'] = ramedicas_df['nombre'].apply(preprocess_name)
+    ramedicas_df['processed_nombre'] = ramedicas_df['nombre'].apply(preprocess_name)  # Cambié 'nomart' a 'nombre'
 
-    if client_name_processed in ramedicas_df['processed_nomart'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
+    if client_name_processed in ramedicas_df['processed_nombre'].values:
+        exact_match = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed].iloc[0]
         return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nombre'], 'codart': exact_match['codart'], 'score': 100}
 
     client_terms = set(client_name_processed.split())
-    matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
+    matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_set_ratio, limit=10)
     best_match = None
     highest_score = 0
 
@@ -85,7 +84,6 @@ st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 # Subtitulo
 st.markdown('<div class="subtitle">Codigo Ramedicas - Homologador de Productos</div>', unsafe_allow_html=True)
 
-
 # Botón para actualizar la base de datos
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()
@@ -113,8 +111,3 @@ if uploaded_file:
         results_df = pd.DataFrame(results)
         st.dataframe(results_df)
         st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
-
-
-
-
-
