@@ -81,12 +81,17 @@ st.markdown(
 # Título
 st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
+# Interfaz de Streamlit
+st.title("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
+
+
+
 # Botón para actualizar la base de datos
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()
 
 # Input de nombres o archivo subido
-client_names_manual = st.text_area("Ingresa los nombres de los productos:")
+client_names_manual = st.text_area("Ingresa los nombres de los productos que envio el cliente, separados por comas o saltos de línea:")
 uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna nombres que contenga productos aquí:", type="xlsx")
 
 # Procesar manualmente
