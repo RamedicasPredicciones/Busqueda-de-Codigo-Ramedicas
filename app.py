@@ -82,7 +82,7 @@ st.markdown(
 st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
 # Interfaz de Streamlit
-st.title("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
+st.subtitle("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
 
 
 
