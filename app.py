@@ -113,5 +113,3 @@ if uploaded_file:
         results_df = pd.DataFrame(results)
         st.dataframe(results_df)
         st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
-
-"
