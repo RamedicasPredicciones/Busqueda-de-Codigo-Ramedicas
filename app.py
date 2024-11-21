@@ -77,10 +77,11 @@ def to_excel(df):
     return output.getvalue()
 
 # Interfaz de Streamlit
-st.title("Código Ramedicas - Homologador de Productos")
+st.title("**RAMEDICAS S.A.S.** - Homologador de Productos")
 st.markdown(
     """
-    Bienvenido al Homologador de Productos de Ramedicas.  
+    # **RAMEDICAS S.A.S.**
+    ### Homologador de Productos de Ramedicas  
     Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
     """
 )
@@ -88,9 +89,39 @@ st.markdown(
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()
 
+# Subir archivo
+uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna nombres que contenga productos aquí:", type="xlsx")
+
+# Procesar manualmente
 client_names_manual = st.text_area("Ingresa los nombres de los productos que envió el cliente, separados por saltos de línea:")
+
 ramedicas_df = load_ramedicas_data()
 
+if uploaded_file:
+    client_names_df = pd.read_excel(uploaded_file)
+    if 'nombre' not in client_names_df.columns:
+        st.error("El archivo debe tener una columna llamada 'nombre'.")
+    else:
+        client_names = client_names_df['nombre'].tolist()
+        matches = []
+
+        for client_name in client_names:
+            if client_name.strip():
+                match = find_best_match(client_name, ramedicas_df)
+                matches.append(match)
+
+        results_df = pd.DataFrame(matches)
+        st.dataframe(results_df)
+
+        excel_data = to_excel(results_df)
+        st.download_button(
+            label="📥 Descargar resultados en Excel",
+            data=excel_data,
+            file_name="homologacion_resultados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+# Procesar texto manual
 if client_names_manual:
     client_names = client_names_manual.split("\n")
     matches = []
