@@ -112,7 +112,7 @@ def to_excel(df):
     return output.getvalue()
 
 # Interfaz de Streamlit
-st.title("Homologador de Productos - Ramedicas")  # El título de la aplicación
+st.title("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
 
 # Opción para actualizar la base de datos y limpiar el caché
 if st.button("Actualizar base de datos"):
@@ -122,7 +122,7 @@ if st.button("Actualizar base de datos"):
 client_names_manual = st.text_area("Ingresa los nombres de los productos que envio el cliente, separados por comas o saltos de línea:")
 
 # Opción para subir un archivo con los nombres de los clientes
-uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los productos aqui", type="xlsx")
+uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los productos aquí:", type="xlsx")
 
 # Procesar si el usuario ha ingresado varios nombres manualmente
 if client_names_manual:
