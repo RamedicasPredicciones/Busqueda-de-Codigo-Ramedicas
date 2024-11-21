@@ -119,10 +119,10 @@ if st.button("Actualizar base de datos"):
     st.cache_data.clear()  # Limpiar el caché para cargar los datos de nuevo
 
 # Opción para ingresar uno o más nombres de clientes manualmente
-client_names_manual = st.text_area("Ingresa los nombres de los clientes, separados por comas o saltos de línea:")
+client_names_manual = st.text_area("Ingresa los nombres de los productos que envio el cliente, separados por comas o saltos de línea:")
 
 # Opción para subir un archivo con los nombres de los clientes
-uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los clientes", type="xlsx")
+uploaded_file = st.file_uploader("O sube tu archivo con los nombres de los productos aqui", type="xlsx")
 
 # Procesar si el usuario ha ingresado varios nombres manualmente
 if client_names_manual:
