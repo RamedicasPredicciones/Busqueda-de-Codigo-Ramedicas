@@ -6,10 +6,10 @@ from rapidfuzz import fuzz, process
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
-    
-ramedicas_url = ( "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1")
-ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-return ramedicas_df[['codart', 'nomart']]
+    # Asegúrate de que el código dentro de la función esté correctamente indentado
+    ramedicas_url = "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
+    ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
+    return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres
 def preprocess_name(name): 
