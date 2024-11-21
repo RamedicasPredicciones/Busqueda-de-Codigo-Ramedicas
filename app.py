@@ -112,7 +112,8 @@ def to_excel(df):
     return output.getvalue()
 
 # Interfaz de Streamlit
-st.title("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
+st.title("Codigo Ramedicas
+Homologador de Productos")  # El título de la aplicación
 
 # Opción para actualizar la base de datos y limpiar el caché
 if st.button("Actualizar base de datos"):
