@@ -7,9 +7,7 @@ from rapidfuzz import fuzz, process
 @st.cache_data
 def load_ramedicas_data():
     
-ramedicas_url = (
-    "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
-)
+ramedicas_url = ( "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1")
 ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
 return ramedicas_df[['codart', 'nomart']]
 
