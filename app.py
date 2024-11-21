@@ -10,8 +10,7 @@ def load_ramedicas_data():
         "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
     )
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-    st.write(ramedicas_df.columns)  # Mostrar las columnas cargadas para verificar
-    return ramedicas_df[['codart', 'nomart', 'presentacion']]  # Asegúrate de que estas columnas existan
+    return ramedicas_df[['codart', 'nomart', 'presentacion']]  # Ahora usamos 'nomart' y 'presentacion'
 
 # Preprocesar nombres
 def preprocess_name(name): 
@@ -27,11 +26,11 @@ def preprocess_name(name):
 
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
-    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)  # Usamos 'nomart' como identificador
+    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)  # Usamos 'nomart'
 
     if client_name_processed in ramedicas_df['processed_nomart'].values:
         exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
-        return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'presente_coinci': 'Sí'}
+        return {'nombre_cliente': client_name, 'nomart_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'presentacion': exact_match['presentacion'], 'coincide_presentacion': 'Sí'}
 
     client_terms = set(client_name_processed.split())
     matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
@@ -44,10 +43,19 @@ def find_best_match(client_name, ramedicas_df):
         if client_terms.issubset(candidate_terms):
             if score > highest_score:
                 highest_score = score
-                best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nomart'], 'codart': candidate_row['codart'], 'presente_coinci': 'Sí' if candidate_row['presentacion'] == match else 'No'}
+                best_match = {'nombre_cliente': client_name, 'nomart_ramedicas': candidate_row['nomart'], 'codart': candidate_row['codart'], 'presentacion': candidate_row['presentacion'], 'score': score}
 
     if not best_match and matches:
-        best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': matches[0][0], 'codart': ramedicas_df.iloc[matches[0][2]]['codart'], 'presente_coinci': 'No'}
+        best_match = {'nombre_cliente': client_name, 'nomart_ramedicas': matches[0][0], 'codart': ramedicas_df.iloc[matches[0][2]]['codart'], 'presentacion': ramedicas_df.iloc[matches[0][2]]['presentacion'], 'score': matches[0][1]}
+
+    # Verificar coincidencia de la presentación
+    if best_match:
+        cliente_presentacion = preprocess_name(client_name).split()[-1]  # Asumimos que la presentación está al final
+        if cliente_presentacion != best_match['presentacion']:
+            best_match['coincide_presentacion'] = 'No coincide'
+        else:
+            best_match['coincide_presentacion'] = 'Sí'
+
     return best_match
 
 def to_excel(df):
@@ -112,3 +120,4 @@ if uploaded_file:
         results_df = pd.DataFrame(results)
         st.dataframe(results_df)
         st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
+
