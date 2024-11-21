@@ -80,7 +80,7 @@ def to_excel(df):
 st.markdown(
     """
     <h1 style="text-align: center; color: orange;">RAMEDICAS S.A.S.</h1>
-    <h3 style="text-align: center;">Homologador de Productos por nombre</h3>
+    <h3 style="text-align: center;">Homologador de Productos por Nombre</h3>
     <p style="text-align: center;">
     Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
     </p>
