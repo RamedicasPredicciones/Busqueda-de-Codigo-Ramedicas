@@ -10,7 +10,7 @@ def load_ramedicas_data():
         "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
     )
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-    return ramedicas_df[['codart', 'nombre']]  # Cambié 'nomart' a 'nombre'
+    return ramedicas_df[['codart', 'nomart', 'presentacion']]  # Usamos 'nomart' como identificador principal
 
 # Preprocesar nombres
 def preprocess_name(name): 
@@ -26,27 +26,31 @@ def preprocess_name(name):
 
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
-    ramedicas_df['processed_nombre'] = ramedicas_df['nombre'].apply(preprocess_name)  # Cambié 'nomart' a 'nombre'
+    ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)  # Preprocesar 'nomart'
 
-    if client_name_processed in ramedicas_df['processed_nombre'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed].iloc[0]
-        return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nombre'], 'codart': exact_match['codart'], 'score': 100}
+    # Primero buscamos una coincidencia exacta con 'nomart'
+    if client_name_processed in ramedicas_df['processed_nomart'].values:
+        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
+        return {'nombre_cliente': client_name, 'nomart_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'presentacion': exact_match['presentacion'], 'coincide_presentacion': True}
 
-    client_terms = set(client_name_processed.split())
-    matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_set_ratio, limit=10)
+    # Si no hay coincidencia exacta, buscamos la mejor coincidencia utilizando fuzzy matching
+    matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
+    
     best_match = None
     highest_score = 0
-
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        candidate_terms = set(match.split())
-        if client_terms.issubset(candidate_terms):
-            if score > highest_score:
-                highest_score = score
-                best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nombre'], 'codart': candidate_row['codart'], 'score': score}
+        if score > highest_score:
+            highest_score = score
+            best_match = {'nombre_cliente': client_name, 'nomart_ramedicas': candidate_row['nomart'], 'codart': candidate_row['codart'], 'presentacion': candidate_row['presentacion'], 'coincide_presentacion': False}
 
-    if not best_match and matches:
-        best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': matches[0][0], 'codart': ramedicas_df.iloc[matches[0][2]]['codart'], 'score': matches[0][1]}
+    # Verificar coincidencia de presentación
+    if best_match:
+        # Si coincide la presentación, actualizar el flag
+        if client_name_processed in best_match['presentacion'].lower():
+            best_match['coincide_presentacion'] = True
+        else:
+            best_match['coincide_presentacion'] = False
     return best_match
 
 def to_excel(df):
@@ -89,7 +93,7 @@ if st.button("Actualizar base de datos"):
     st.cache_data.clear()
 
 # Input de nombres o archivo subido
-client_names_manual = st.text_area("Ingresa los nombres de los productos que envio el cliente, separados por comas o saltos de línea:")
+client_names_manual = st.text_area("Ingresa los nombres de los productos que envío el cliente, separados por comas o saltos de línea:")
 uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna nombres que contenga productos aquí:", type="xlsx")
 
 # Procesar manualmente
@@ -111,3 +115,4 @@ if uploaded_file:
         results_df = pd.DataFrame(results)
         st.dataframe(results_df)
         st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
+
