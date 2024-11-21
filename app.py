@@ -1,7 +1,13 @@
+import unicodedata
 import streamlit as st
 import pandas as pd
 from io import BytesIO
 from rapidfuzz import fuzz, process
+
+# Función para normalizar tildes (eliminar acentos)
+def remove_accents(input_str):
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    return ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
@@ -14,6 +20,7 @@ def load_ramedicas_data():
 
 # Preprocesar nombres
 def preprocess_name(name): 
+    name = remove_accents(name)  # Eliminar tildes
     replacements = {
         "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "", ".": "",
         "mg": " mg", "ml": " ml", "capsula": " capsulas", "tablet": " tableta",
