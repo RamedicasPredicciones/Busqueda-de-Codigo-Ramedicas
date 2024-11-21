@@ -88,8 +88,11 @@ st.markdown(
     <p style="text-align: center; font-family: Arial, sans-serif; color: #6B6B6B;">
         Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
     </p>
-    """, unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True
 )
+
+
 
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()
