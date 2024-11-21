@@ -6,19 +6,22 @@ from rapidfuzz import fuzz, process
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
-    # Asegúrate de que el código dentro de la función esté correctamente indentado
-    ramedicas_url = "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1"
+    ramedicas_url = ("https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx&sheet=Hoja1")
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
     return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres
 def preprocess_name(name): 
+    # Reemplazos para hacer que los nombres sean más comparables, pero sin perder la estructura
     replacements = {
         "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "", ".": "",
         "mg": " mg", "ml": " ml", "capsula": " capsulas", "tablet": " tableta",
+        "jarabe": " jarabe", "solucion": " solucion", "comprimido": " comprimido"
     }
     for old, new in replacements.items():
         name = name.lower().replace(old, new)
+    
+    # Evitar eliminar palabras clave como "mg", "ml" o "jarabe"
     stopwords = {"de", "el", "la", "los", "las", "un", "una", "y", "en", "por"}
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
@@ -27,12 +30,14 @@ def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
+    # Verificar si hay una coincidencia exacta
     if client_name_processed in ramedicas_df['processed_nomart'].values:
         exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
         return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'score': 100}
 
+    # Utilizar fuzz.token_sort_ratio para evaluar las coincidencias mejor considerando el orden de las palabras
     client_terms = set(client_name_processed.split())
-    matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
+    matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_sort_ratio, limit=10)
     best_match = None
     highest_score = 0
 
@@ -82,7 +87,6 @@ st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
 # Subtitulo
 st.markdown('<div class="subtitle">Codigo Ramedicas - Homologador de Productos</div>', unsafe_allow_html=True)
-
 
 # Botón para actualizar la base de datos
 if st.button("Actualizar base de datos"):
