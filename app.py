@@ -12,7 +12,7 @@ def load_ramedicas_data():
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
     return ramedicas_df[['codart', 'nombre']]  # Cambié 'nomart' a 'nombre'
 
-# Preprocesar nombres
+# Preprocesar nombres (normaliza texto, elimina caracteres no deseados)
 def preprocess_name(name): 
     replacements = {
         "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "", ".": "",
@@ -24,32 +24,35 @@ def preprocess_name(name):
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
 
-def find_best_match(client_name, ramedicas_df, similarity_threshold=80):
+# Buscar la mejor coincidencia
+def find_best_match(client_name, ramedicas_df, similarity_threshold=85):
     client_name_processed = preprocess_name(client_name)
-    ramedicas_df['processed_nombre'] = ramedicas_df['nombre'].apply(preprocess_name)  # Cambié 'nomart' a 'nombre'
+    ramedicas_df['processed_nombre'] = ramedicas_df['nombre'].apply(preprocess_name)
 
-    # Intentar encontrar una coincidencia exacta
-    if client_name_processed in ramedicas_df['processed_nombre'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed].iloc[0]
+    # Intentar una coincidencia exacta
+    exact_matches = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed]
+    if not exact_matches.empty:
+        exact_match = exact_matches.iloc[0]
         return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nombre'], 'codart': exact_match['codart'], 'score': 100}
 
-    # Si no hay coincidencia exacta, buscar la mejor coincidencia aproximada
+    # Si no hay coincidencia exacta, buscar la mejor coincidencia
     matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_sort_ratio, limit=10)
     
-    # Filtrar solo las coincidencias que tienen un puntaje por encima del umbral de similitud
+    # Filtrar coincidencias con puntajes por encima del umbral
     best_match = None
     for match, score, idx in matches:
-        if score >= similarity_threshold:  # Filtrar por un puntaje mínimo de similitud
+        if score >= similarity_threshold:  # Si el puntaje es suficientemente alto
             candidate_row = ramedicas_df.iloc[idx]
             best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nombre'], 'codart': candidate_row['codart'], 'score': score}
-            break  # Detenerse después de encontrar la mejor coincidencia dentro del umbral
+            break  # Encontramos el mejor match y terminamos la búsqueda
 
-    # Si no se encuentra una coincidencia que cumpla el umbral, no mostrar ningún resultado
+    # Si no se encontró un match adecuado
     if not best_match:
         return {'nombre_cliente': client_name, 'nombre_ramedicas': "Sin coincidencias precisas", 'codart': "", 'score': 0}
 
     return best_match
 
+# Función para convertir el dataframe a Excel para descarga
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
