@@ -79,10 +79,14 @@ def to_excel(df):
 # Interfaz de Streamlit
 st.markdown(
     """
-    <h1 style="text-align: center; color: orange;">RAMEDICAS S.A.S.</h1>
-    <h3 style="text-align: center;">Homologador de Productos por Nombre</h3>
-    <p style="text-align: center;">
-    Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
+    <h1 style="text-align: center; color: #FF5800; font-family: Arial, sans-serif;">
+        RAMEDICAS S.A.S.
+    </h1>
+    <h3 style="text-align: center; font-family: Arial, sans-serif; color: #3A86FF;">
+        Homologador de Productos por Nombre
+    </h3>
+    <p style="text-align: center; font-family: Arial, sans-serif; color: #6B6B6B;">
+        Esta herramienta te permite buscar y consultar los códigos de productos de manera eficiente y rápida.
     </p>
     """, unsafe_allow_html=True
 )
