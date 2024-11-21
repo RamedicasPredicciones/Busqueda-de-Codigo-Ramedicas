@@ -13,7 +13,7 @@ def load_ramedicas_data():
     return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres
-def preprocess_name(name):
+def preprocess_name(name): 
     replacements = {
         "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "", ".": "",
         "mg": " mg", "ml": " ml", "capsula": " capsulas", "tablet": " tableta",
