@@ -35,31 +35,41 @@ def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nombre'] = ramedicas_df['nomart'].apply(preprocess_name)  # Usamos 'nomart'
 
-    if client_name_processed in ramedicas_df['processed_nombre'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nombre'] == client_name_processed].iloc[0]
-        return {'nombre_cliente': client_name, 'nombre_ramedicas': exact_match['nomart'], 'codart': exact_match['codart'], 'presentación': exact_match['presentación'], 'score': 100, 'coincide_presentacion': 'Sí'}
-
+    # Lista para almacenar todas las coincidencias
+    matches_list = []
     client_terms = set(client_name_processed.split())
+    
+    # Obtenemos las mejores coincidencias
     matches = process.extract(client_name_processed, ramedicas_df['processed_nombre'], scorer=fuzz.token_set_ratio, limit=10)
-    best_match = None
-    highest_score = 0
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
         candidate_terms = set(match.split())
         if client_terms.issubset(candidate_terms):
-            if score > highest_score:
-                highest_score = score
-                # Verificamos si coincide la presentación
-                coincide_presentacion = 'Sí' if client_name_processed == preprocess_name(candidate_row['presentación']) else 'No'
-                best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': candidate_row['nomart'], 'codart': candidate_row['codart'], 'presentación': candidate_row['presentación'], 'score': score, 'coincide_presentacion': coincide_presentacion}
+            # Verificamos si coincide la presentación
+            coincide_presentacion = 'Sí' if client_name_processed == preprocess_name(candidate_row['presentación']) else 'No'
+            matches_list.append({
+                'nombre_cliente': client_name,
+                'nombre_ramedicas': candidate_row['nomart'],
+                'codart': candidate_row['codart'],
+                'presentación': candidate_row['presentación'],
+                'score': score,
+                'coincide_presentacion': coincide_presentacion
+            })
 
-    if not best_match and matches:
+    if not matches_list and matches:
         # Si no se encontró una coincidencia perfecta, se devuelve el primer resultado
         candidate_row = ramedicas_df.iloc[matches[0][2]]
-        best_match = {'nombre_cliente': client_name, 'nombre_ramedicas': matches[0][0], 'codart': candidate_row['codart'], 'presentación': candidate_row['presentación'], 'score': matches[0][1], 'coincide_presentacion': 'No'}
+        matches_list.append({
+            'nombre_cliente': client_name,
+            'nombre_ramedicas': matches[0][0],
+            'codart': candidate_row['codart'],
+            'presentación': candidate_row['presentación'],
+            'score': matches[0][1],
+            'coincide_presentacion': 'No'
+        })
 
-    return best_match
+    return matches_list
 
 def to_excel(df):
     output = BytesIO()
@@ -108,8 +118,13 @@ uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna nomb
 if client_names_manual:
     client_names_list = [name.strip() for name in client_names_manual.splitlines()]
     ramedicas_df = load_ramedicas_data()
-    results = [find_best_match(name, ramedicas_df) for name in client_names_list]
-    results_df = pd.DataFrame(results)
+    all_results = []
+
+    for name in client_names_list:
+        results = find_best_match(name, ramedicas_df)
+        all_results.extend(results)  # Agregar todas las coincidencias a la lista general
+
+    results_df = pd.DataFrame(all_results)
     st.dataframe(results_df)
     st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
 
@@ -119,7 +134,12 @@ if uploaded_file:
         st.error("El archivo debe tener una columna llamada 'nombre'.")
     else:
         ramedicas_df = load_ramedicas_data()
-        results = [find_best_match(name, ramedicas_df) for name in client_names_df['nombre']]
-        results_df = pd.DataFrame(results)
+        all_results = []
+
+        for name in client_names_df['nombre']:
+            results = find_best_match(name, ramedicas_df)
+            all_results.extend(results)
+
+        results_df = pd.DataFrame(all_results)
         st.dataframe(results_df)
         st.download_button("Descargar resultados", data=to_excel(results_df), file_name="homologacion.xlsx")
