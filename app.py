@@ -81,9 +81,8 @@ st.markdown(
 # Título
 st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
-# Interfaz de Streamlit
-st.subtitle("Codigo Ramedicas - Homologador de Productos")  # El título de la aplicación
-
+# Subtitulo
+st.markdown('<div class="subtitle">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
 
 # Botón para actualizar la base de datos
