@@ -82,7 +82,7 @@ st.markdown(
 st.markdown('<div class="title">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
 
 # Subtitulo
-st.markdown('<div class="subtitle">RAMÉDICAS SAS</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Codigo Ramedicas - Homologador de Productos</div>', unsafe_allow_html=True)
 
 
 # Botón para actualizar la base de datos
