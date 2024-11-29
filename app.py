@@ -98,7 +98,7 @@ if st.button("Actualizar base de datos"):
     st.cache_data.clear()
 
 # Subir archivo
-uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna nombres que contenga productos aquí:", type="xlsx")
+uploaded_file = st.file_uploader("O sube tu archivo de excel con la columna "nombres" que contenga productos aquí:", type="xlsx")
 
 # Procesar manualmente
 client_names_manual = st.text_area("Ingresa los nombres de los productos que envió el cliente, separados por saltos de línea:")
