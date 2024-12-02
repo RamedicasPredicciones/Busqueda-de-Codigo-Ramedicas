@@ -46,22 +46,32 @@ def find_best_match(client_name, ramedicas_df):
     matches = []
     for client_term in client_terms:
         # Buscar coincidencias exactas primero
-        if client_term in ramedicas_df['processed_nomart'].values:
-            exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_term].iloc[0]
+        exact_matches = ramedicas_df[ramedicas_df['processed_nomart'] == client_term]
+        if not exact_matches.empty:
+            exact_match = exact_matches.iloc[0]
             return {
                 'nombre_cliente': client_name,
                 'nombre_ramedicas': exact_match['nomart'],
                 'codart': exact_match['codart'],
                 'score': 100
             }
+
         # Si no hay coincidencia exacta, buscar por similitud usando fuzzy matching
         matches += process.extract(client_term, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
+
+    # Filtrar para evitar coincidencias incorrectas que tengan componentes adicionales
+    filtered_matches = []
+    for match, score, idx in matches:
+        candidate_row = ramedicas_df.iloc[idx]
+        # Asegurarse de que el producto encontrado no tenga componentes adicionales no mencionados
+        if fuzz.ratio(client_name_processed, candidate_row['processed_nomart']) > 85:
+            filtered_matches.append((match, score, idx))
 
     # Obtener la mejor coincidencia
     best_match = None
     highest_score = 0
 
-    for match, score, idx in matches:
+    for match, score, idx in filtered_matches:
         candidate_row = ramedicas_df.iloc[idx]
         if score > highest_score:
             highest_score = score
@@ -73,12 +83,12 @@ def find_best_match(client_name, ramedicas_df):
             }
 
     # Si no se encuentra mejor coincidencia, devuelve la primera que se encuentre
-    if not best_match and matches:
+    if not best_match and filtered_matches:
         best_match = {
             'nombre_cliente': client_name,
-            'nombre_ramedicas': matches[0][0],
-            'codart': ramedicas_df.iloc[matches[0][2]]['codart'],
-            'score': matches[0][1]
+            'nombre_ramedicas': filtered_matches[0][0],
+            'codart': ramedicas_df.iloc[filtered_matches[0][2]]['codart'],
+            'score': filtered_matches[0][1]
         }
 
     return best_match
