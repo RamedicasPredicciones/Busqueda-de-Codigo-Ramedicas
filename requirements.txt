@@ -4,3 +4,4 @@ openpyxl
 rapidfuzz
 scikit-learn
 pillow
+sentence-transformers
