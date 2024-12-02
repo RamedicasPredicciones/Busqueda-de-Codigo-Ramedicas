@@ -6,23 +6,29 @@ from rapidfuzz import fuzz, process
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
-    # URL del archivo Excel en Google Drive
     ramedicas_url = (
         "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
     )
-    # Leer el archivo Excel desde la URL
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
     return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres para una mejor comparación
 def preprocess_name(name):
+    # Reemplazos generales
     replacements = {
-        "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "",
+        "(": "", ")": "", "+": " + ", "/": " ", "-": " ", ",": "", ";": "",
         ".": "", "mg": " mg", "ml": " ml", "capsula": " capsulas",
         "tablet": " tableta", "tableta": " tableta", "parches": " parche", "parche": " parche"
     }
     for old, new in replacements.items():
         name = name.lower().replace(old, new)
+
+    # Separar por "+" si existe en el nombre
+    if "+" in name:
+        parts = name.split(" + ")
+        name = " + ".join(sorted(parts))
+
+    # Eliminar stopwords
     stopwords = {"de", "el", "la", "los", "las", "un", "una", "y", "en", "por"}
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
@@ -50,6 +56,7 @@ def find_best_match(client_name, ramedicas_df):
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
         candidate_terms = set(match.split())
+        # Comprobar si todos los términos del cliente están en el candidato
         if client_terms.issubset(candidate_terms) and score > highest_score:
             highest_score = score
             best_match = {
@@ -91,8 +98,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-
 
 if st.button("Actualizar base de datos"):
     st.cache_data.clear()
@@ -149,3 +154,4 @@ if client_names_manual:
         file_name="homologacion_resultados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
