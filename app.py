@@ -2,62 +2,68 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from rapidfuzz import fuzz, process
+import re
 
 # Cargar datos de Ramedicas desde Google Drive
 @st.cache_data
 def load_ramedicas_data():
+    # URL del archivo Excel en Google Drive
     ramedicas_url = (
         "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
     )
+    # Leer el archivo Excel desde la URL
     ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
     return ramedicas_df[['codart', 'nomart']]
 
 # Preprocesar nombres para una mejor comparación
 def preprocess_name(name):
-    # Reemplazos generales
     replacements = {
-        "(": "", ")": "", "+": " + ", "/": " ", "-": " ", ",": "", ";": "",
+        "(": "", ")": "", "+": " ", "/": " ", "-": " ", ",": "", ";": "",
         ".": "", "mg": " mg", "ml": " ml", "capsula": " capsulas",
         "tablet": " tableta", "tableta": " tableta", "parches": " parche", "parche": " parche"
     }
     for old, new in replacements.items():
         name = name.lower().replace(old, new)
-
-    # Separar por "+" si existe en el nombre
-    if "+" in name:
-        parts = name.split(" + ")
-        name = " + ".join(sorted(parts))
-
-    # Eliminar stopwords
     stopwords = {"de", "el", "la", "los", "las", "un", "una", "y", "en", "por"}
     words = [word for word in name.split() if word not in stopwords]
     return " ".join(sorted(words))
+
+# Dividir nombre por '+' cuando sea necesario
+def split_plus_terms(name):
+    if "+" in name:
+        parts = name.split("+")
+        return [preprocess_name(part.strip()) for part in parts]
+    return [preprocess_name(name)]
 
 # Buscar la mejor coincidencia entre el nombre del cliente y los productos de Ramedicas
 def find_best_match(client_name, ramedicas_df):
     client_name_processed = preprocess_name(client_name)
     ramedicas_df['processed_nomart'] = ramedicas_df['nomart'].apply(preprocess_name)
 
-    if client_name_processed in ramedicas_df['processed_nomart'].values:
-        exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_name_processed].iloc[0]
-        return {
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': exact_match['nomart'],
-            'codart': exact_match['codart'],
-            'score': 100
-        }
+    # Desglosar los términos cuando se usan '+'
+    client_terms = split_plus_terms(client_name_processed)
 
-    client_terms = set(client_name_processed.split())
-    matches = process.extract(client_name_processed, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
+    matches = []
+    for client_term in client_terms:
+        # Buscar coincidencias exactas primero
+        if client_term in ramedicas_df['processed_nomart'].values:
+            exact_match = ramedicas_df[ramedicas_df['processed_nomart'] == client_term].iloc[0]
+            return {
+                'nombre_cliente': client_name,
+                'nombre_ramedicas': exact_match['nomart'],
+                'codart': exact_match['codart'],
+                'score': 100
+            }
+        # Si no hay coincidencia exacta, buscar por similitud usando fuzzy matching
+        matches += process.extract(client_term, ramedicas_df['processed_nomart'], scorer=fuzz.token_set_ratio, limit=10)
 
+    # Obtener la mejor coincidencia
     best_match = None
     highest_score = 0
 
     for match, score, idx in matches:
         candidate_row = ramedicas_df.iloc[idx]
-        candidate_terms = set(match.split())
-        # Comprobar si todos los términos del cliente están en el candidato
-        if client_terms.issubset(candidate_terms) and score > highest_score:
+        if score > highest_score:
             highest_score = score
             best_match = {
                 'nombre_cliente': client_name,
@@ -66,6 +72,7 @@ def find_best_match(client_name, ramedicas_df):
                 'score': score
             }
 
+    # Si no se encuentra mejor coincidencia, devuelve la primera que se encuentre
     if not best_match and matches:
         best_match = {
             'nombre_cliente': client_name,
@@ -154,4 +161,3 @@ if client_names_manual:
         file_name="homologacion_resultados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
