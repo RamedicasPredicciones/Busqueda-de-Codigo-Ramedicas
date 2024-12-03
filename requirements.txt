@@ -5,5 +5,3 @@ rapidfuzz
 scikit-learn
 pillow
 sentence-transformers
-torch
-transformers
