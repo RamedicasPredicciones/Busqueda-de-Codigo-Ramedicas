@@ -1,165 +1,59 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-from sentence_transformers import SentenceTransformer, util
-import pickle
-import os
+import openai
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Configuración general de la página de Streamlit
-st.set_page_config(
-    page_title="Homologador Inteligente",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Cargar el DataFrame de Ramedicas (esto es solo un ejemplo)
+def load_ramedicas_df():
+    # Aquí cargarías tu DataFrame desde un archivo Excel, CSV o cualquier otro formato
+    df = pd.read_csv('ramedicas_data.csv')  # Ajusta a la ubicación de tu archivo
+    return df
 
-# Preprocesar nombres para embeddings
-def preprocess_name(name):
-    name = str(name).lower()
-    return name.replace("+", " ").replace("/", " ").replace("-", " ").replace(",", "")
-
-# Convertir DataFrame a archivo Excel
-def to_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Homologación")
-    return output.getvalue()
-
-# Función para cargar los datos desde Google Drive
-def load_ramedicas_data():
-    ramedicas_url = (
-        "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
-    )
-    try:
-        ramedicas_df = pd.read_excel(ramedicas_url, sheet_name="Hoja1")
-        return ramedicas_df[['codart', 'nomart']]
-    except Exception as e:
-        st.error(f"Error al cargar datos desde Google Drive: {e}")
-        return pd.DataFrame()
-
-# Cargar el modelo de Sentence Transformers (sin caché)
-def load_model():
-    return SentenceTransformer('paraphrase-MiniLM-L3-v2')
-
-# Cargar o crear embeddings (se almacenan en caché solo los embeddings, no el modelo)
-@st.cache_data
-def create_ramedicas_embeddings(ramedicas_df, model, filename="ramedicas_embeddings.pkl"):
-    ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_name)
-    embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
-    with open(filename, 'wb') as f:
-        pickle.dump(embeddings, f)
+# Función para crear los embeddings
+def create_ramedicas_embeddings(df, model):
+    # Genera los embeddings a partir de la columna que desees, ajusta según sea necesario
+    embeddings = model.encode(df['nombre_producto'].tolist())
     return embeddings
 
-# Cargar los embeddings desde el archivo
-def load_embeddings(filename="ramedicas_embeddings.pkl"):
-    if os.path.exists(filename):
-        with open(filename, 'rb') as f:
-            embeddings = pickle.load(f)
-        return embeddings
-    return None
+# Cargar o crear embeddings (función cacheada)
+@st.cache_data
+def load_or_create_ramedicas_embeddings(df, model):
+    return create_ramedicas_embeddings(df, model)
 
-# Generar coincidencias
-def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5, batch_size=50):
-    matches = []
-    for i in range(0, len(client_names), batch_size):
-        batch = client_names[i:i + batch_size]
-        client_names_processed = [preprocess_name(name) for name in batch]
-        client_embeddings = model.encode(client_names_processed, convert_to_tensor=True)
+# Función para buscar coincidencias
+def search_similar_products(query, df, model, embeddings):
+    query_embedding = model.encode([query])
+    similarities = cosine_similarity(query_embedding, embeddings)
+    top_match_idx = similarities.argmax()
+    return df.iloc[top_match_idx]
 
-        # Calcular similitudes por lotes
-        similarity_scores = util.pytorch_cos_sim(client_embeddings, ramedicas_embeddings)
+# Inicialización del modelo OpenAI o cualquier otro modelo de embeddings
+# Si estás utilizando OpenAI o cualquier otro modelo, asegúrate de haber configurado la clave API
+openai.api_key = 'tu_clave_api_aqui'
 
-        for j, scores in enumerate(similarity_scores):
-            best_idx = scores.argmax().item()
-            best_score = scores[best_idx].item()
+# Aquí usaremos el modelo de OpenAI o cualquier modelo que utilices para generar los embeddings
+class EmbeddingModel:
+    def encode(self, text_list):
+        # Aquí deberías llamar a la API de OpenAI u otro modelo
+        # Este es solo un ejemplo de cómo deberías estructurarlo
+        return [openai.Embedding.create(input=text)['data'][0]['embedding'] for text in text_list]
 
-            if best_score >= threshold:
-                matches.append({
-                    'nombre_cliente': batch[j],
-                    'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
-                    'codart': ramedicas_df.iloc[best_idx]['codart'],
-                    'score': best_score
-                })
-            else:
-                matches.append({
-                    'nombre_cliente': batch[j],
-                    'nombre_ramedicas': "No encontrado",
-                    'codart': None,
-                    'score': best_score
-                })
-    return matches
+# Cargar el modelo de embeddings (puedes usar otro si lo prefieres)
+model = EmbeddingModel()
 
-# Encabezado
-st.markdown(
-    """
-    <h1 style="text-align: center; color: #FF5800; font-family: Arial, sans-serif;">
-        RAMEDICAS S.A.S.
-    </h1>
-    <h3 style="text-align: center; font-family: Arial, sans-serif; color: #3A86FF;">
-        Homologador Inteligente de Productos
-    </h3>
-    <p style="text-align: center; font-family: Arial, sans-serif; color: #6B6B6B;">
-        Busca coincidencias de manera más eficiente utilizando tecnología avanzada.
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+# Cargar el DataFrame
+ramedicas_df = load_ramedicas_df()
 
-# Variables globales
-ramedicas_df = load_ramedicas_data()
-model = load_model()
+# Crear o cargar los embeddings
+ramedicas_embeddings = load_or_create_ramedicas_embeddings(ramedicas_df, model)
 
-# Cargar embeddings si ya están disponibles
-ramedicas_embeddings = load_embeddings()
+# Interfaz de Streamlit para la búsqueda de productos
+st.title('Búsqueda de productos similares')
 
-if ramedicas_embeddings is None and not ramedicas_df.empty:
-    ramedicas_embeddings = create_ramedicas_embeddings(ramedicas_df, model)
-else:
-    st.error("No se pudieron cargar los datos de RAMEDICAS. Por favor, verifica la conexión.")
+# Ingresar el producto de búsqueda
+query = st.text_input('Ingresa el nombre del producto')
 
-# Barra lateral
-st.sidebar.header("Opciones")
-threshold = st.sidebar.slider(
-    "Umbral de similitud (0.0 - 1.0)", min_value=0.0, max_value=1.0, value=0.5, step=0.01
-)
-
-# Procesar archivo subido
-uploaded_file = st.file_uploader("Sube tu archivo de Excel con la columna 'nombre':", type="xlsx")
-
-# Procesar nombres manualmente
-client_names_manual = st.text_area("Ingresa los nombres de los productos, separados por saltos de línea:")
-
-if uploaded_file or client_names_manual:
-    st.info("Procesando los datos, por favor espera...")
-
-    client_names = []
-    if uploaded_file:
-        client_names_df = pd.read_excel(uploaded_file)
-        if 'nombre' not in client_names_df.columns:
-            st.error("El archivo debe tener una columna llamada 'nombre'.")
-        else:
-            client_names = client_names_df['nombre'].tolist()
-
-    if client_names_manual:
-        client_names.extend(client_names_manual.split("\n"))
-
-    # Filtrar nombres válidos
-    client_names = [name.strip() for name in client_names if name.strip()]
-
-    # Calcular coincidencias
-    matches = find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold)
-    results_df = pd.DataFrame(matches)
-    st.dataframe(results_df)
-
-    # Descargar resultados
-    if not results_df.empty:
-        excel_data = to_excel(results_df)
-        st.download_button(
-            label="📥 Descargar resultados en Excel",
-            data=excel_data,
-            file_name="homologacion_resultados.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-else:
-    st.warning("Por favor sube un archivo o ingresa nombres manualmente.")
+if query:
+    similar_product = search_similar_products(query, ramedicas_df, model, ramedicas_embeddings)
+    st.write(f"Producto más similar: {similar_product['nombre_producto']}")
+    st.write(f"Descripción: {similar_product['descripcion']}")
