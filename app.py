@@ -1,10 +1,11 @@
-# Código optimizado para mejorar el rendimiento de la aplicación Streamlit
+# Código optimizado con precálculo de embeddings de RAMEDICAS
 
 import streamlit as st
 import pandas as pd
 from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
-import torch
+import pickle
+import os
 
 # Configuración general de la página de Streamlit
 st.set_page_config(
@@ -13,6 +14,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Preprocesar nombres para embeddings
+def preprocess_name(name):
+    name = str(name).lower()
+    return name.replace("+", " ").replace("/", " ").replace("-", " ").replace(",", "")
+
+# Convertir DataFrame a archivo Excel
+def to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Homologación")
+    return output.getvalue()
 
 # Función para cargar los datos desde Google Drive
 @st.cache_data
@@ -32,17 +45,18 @@ def load_ramedicas_data():
 def load_model():
     return SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
-# Preprocesar nombres para embeddings
-def preprocess_name(name):
-    name = str(name).lower()
-    return name.replace("+", " ").replace("/", " ").replace("-", " ").replace(",", "")
-
-# Convertir DataFrame a archivo Excel
-def to_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Homologación")
-    return output.getvalue()
+# Cargar o calcular embeddings de RAMEDICAS
+@st.cache_data
+def load_or_create_ramedicas_embeddings(ramedicas_df, model, filename="ramedicas_embeddings.pkl"):
+    if os.path.exists(filename):
+        with open(filename, 'rb') as f:
+            embeddings = pickle.load(f)
+    else:
+        ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_name)
+        embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
+        with open(filename, 'wb') as f:
+            pickle.dump(embeddings, f)
+    return embeddings
 
 # Generar coincidencias
 def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5):
@@ -95,8 +109,7 @@ ramedicas_df = load_ramedicas_data()
 model = load_model()
 
 if not ramedicas_df.empty:
-    ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_name)
-    ramedicas_embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
+    ramedicas_embeddings = load_or_create_ramedicas_embeddings(ramedicas_df, model)
 else:
     st.error("No se pudieron cargar los datos de RAMEDICAS. Por favor, verifica la conexión.")
 
@@ -105,11 +118,6 @@ st.sidebar.header("Opciones")
 threshold = st.sidebar.slider(
     "Umbral de similitud (0.0 - 1.0)", min_value=0.0, max_value=1.0, value=0.5, step=0.01
 )
-
-# Actualizar base de datos
-if st.sidebar.button("Actualizar base de datos"):
-    st.cache_data.clear()
-    st.experimental_rerun()
 
 # Procesar archivo subido
 uploaded_file = st.file_uploader("Sube tu archivo de Excel con la columna 'nombre':", type="xlsx")
