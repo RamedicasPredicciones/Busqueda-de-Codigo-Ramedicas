@@ -1,4 +1,4 @@
-# Código optimizado y mejorado para la aplicación de Streamlit
+# Código optimizado para mejorar el rendimiento de la aplicación Streamlit
 
 import streamlit as st
 import pandas as pd
@@ -45,29 +45,34 @@ def to_excel(df):
     return output.getvalue()
 
 # Generar coincidencias
-def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, threshold=0.5):
-    client_name_processed = preprocess_name(client_name)
-    client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
+def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5):
+    client_names_processed = [preprocess_name(name) for name in client_names]
+    client_embeddings = model.encode(client_names_processed, convert_to_tensor=True)
 
-    # Calcular similitud en lotes
-    scores = util.pytorch_cos_sim(client_embedding, ramedicas_embeddings)[0]
-    best_idx = scores.argmax().item()
-    best_score = scores[best_idx].item()
+    # Calcular similitudes por lotes
+    similarity_scores = util.pytorch_cos_sim(client_embeddings, ramedicas_embeddings)
 
-    if best_score >= threshold:
-        return {
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
-            'codart': ramedicas_df.iloc[best_idx]['codart'],
-            'score': best_score
-        }
-    else:
-        return {
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': "No encontrado",
-            'codart': None,
-            'score': best_score
-        }
+    matches = []
+    for i, scores in enumerate(similarity_scores):
+        best_idx = scores.argmax().item()
+        best_score = scores[best_idx].item()
+
+        if best_score >= threshold:
+            matches.append({
+                'nombre_cliente': client_names[i],
+                'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
+                'codart': ramedicas_df.iloc[best_idx]['codart'],
+                'score': best_score
+            })
+        else:
+            matches.append({
+                'nombre_cliente': client_names[i],
+                'nombre_ramedicas': "No encontrado",
+                'codart': None,
+                'score': best_score
+            })
+
+    return matches
 
 # Encabezado
 st.markdown(
@@ -130,11 +135,7 @@ if uploaded_file or client_names_manual:
     client_names = [name.strip() for name in client_names if name.strip()]
 
     # Calcular coincidencias
-    matches = [
-        find_best_match(name, ramedicas_df, ramedicas_embeddings, model, threshold)
-        for name in client_names
-    ]
-
+    matches = find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold)
     results_df = pd.DataFrame(matches)
     st.dataframe(results_df)
 
