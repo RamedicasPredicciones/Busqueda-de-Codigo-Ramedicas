@@ -5,3 +5,6 @@ rapidfuzz
 scikit-learn
 pillow
 sentence-transformers
+torch>=1.9.0
+transformers
+numpy
