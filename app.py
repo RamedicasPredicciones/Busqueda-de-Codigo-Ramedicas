@@ -30,7 +30,7 @@ def load_ramedicas_data():
 # Inicializar el modelo de Sentence Transformers
 @st.cache_resource
 def load_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    return SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
 # Preprocesar nombres para embeddings
 def preprocess_name(name):
