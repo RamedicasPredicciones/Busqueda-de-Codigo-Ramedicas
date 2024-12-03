@@ -26,7 +26,6 @@ def to_excel(df):
     return output.getvalue()
 
 # Función para cargar los datos desde Google Drive
-@st.cache_data
 def load_ramedicas_data():
     ramedicas_url = (
         "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
@@ -38,23 +37,26 @@ def load_ramedicas_data():
         st.error(f"Error al cargar datos desde Google Drive: {e}")
         return pd.DataFrame()
 
-# Inicializar el modelo de Sentence Transformers
-@st.cache_resource
+# Cargar el modelo de Sentence Transformers (sin caché)
 def load_model():
     return SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
-# Cargar o calcular embeddings de RAMEDICAS
+# Cargar o crear embeddings (se almacenan en caché solo los embeddings, no el modelo)
 @st.cache_data
-def load_or_create_ramedicas_embeddings(ramedicas_df, model, filename="ramedicas_embeddings.pkl"):
+def create_ramedicas_embeddings(ramedicas_df, model, filename="ramedicas_embeddings.pkl"):
+    ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_name)
+    embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
+    with open(filename, 'wb') as f:
+        pickle.dump(embeddings, f)
+    return embeddings
+
+# Cargar los embeddings desde el archivo
+def load_embeddings(filename="ramedicas_embeddings.pkl"):
     if os.path.exists(filename):
         with open(filename, 'rb') as f:
             embeddings = pickle.load(f)
-    else:
-        ramedicas_df['nomart_processed'] = ramedicas_df['nomart'].apply(preprocess_name)
-        embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
-        with open(filename, 'wb') as f:
-            pickle.dump(embeddings, f)
-    return embeddings
+        return embeddings
+    return None
 
 # Generar coincidencias
 def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5, batch_size=50):
@@ -107,8 +109,11 @@ st.markdown(
 ramedicas_df = load_ramedicas_data()
 model = load_model()
 
-if not ramedicas_df.empty:
-    ramedicas_embeddings = load_or_create_ramedicas_embeddings(ramedicas_df, model)
+# Cargar embeddings si ya están disponibles
+ramedicas_embeddings = load_embeddings()
+
+if ramedicas_embeddings is None and not ramedicas_df.empty:
+    ramedicas_embeddings = create_ramedicas_embeddings(ramedicas_df, model)
 else:
     st.error("No se pudieron cargar los datos de RAMEDICAS. Por favor, verifica la conexión.")
 
@@ -158,4 +163,3 @@ if uploaded_file or client_names_manual:
 
 else:
     st.warning("Por favor sube un archivo o ingresa nombres manualmente.")
-
