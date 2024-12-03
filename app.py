@@ -1,5 +1,3 @@
-# Código optimizado con precálculo de embeddings de RAMEDICAS
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -59,33 +57,34 @@ def load_or_create_ramedicas_embeddings(ramedicas_df, model, filename="ramedicas
     return embeddings
 
 # Generar coincidencias
-def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5):
-    client_names_processed = [preprocess_name(name) for name in client_names]
-    client_embeddings = model.encode(client_names_processed, convert_to_tensor=True)
-
-    # Calcular similitudes por lotes
-    similarity_scores = util.pytorch_cos_sim(client_embeddings, ramedicas_embeddings)
-
+def find_best_matches(client_names, ramedicas_df, ramedicas_embeddings, model, threshold=0.5, batch_size=50):
     matches = []
-    for i, scores in enumerate(similarity_scores):
-        best_idx = scores.argmax().item()
-        best_score = scores[best_idx].item()
+    for i in range(0, len(client_names), batch_size):
+        batch = client_names[i:i + batch_size]
+        client_names_processed = [preprocess_name(name) for name in batch]
+        client_embeddings = model.encode(client_names_processed, convert_to_tensor=True)
 
-        if best_score >= threshold:
-            matches.append({
-                'nombre_cliente': client_names[i],
-                'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
-                'codart': ramedicas_df.iloc[best_idx]['codart'],
-                'score': best_score
-            })
-        else:
-            matches.append({
-                'nombre_cliente': client_names[i],
-                'nombre_ramedicas': "No encontrado",
-                'codart': None,
-                'score': best_score
-            })
+        # Calcular similitudes por lotes
+        similarity_scores = util.pytorch_cos_sim(client_embeddings, ramedicas_embeddings)
 
+        for j, scores in enumerate(similarity_scores):
+            best_idx = scores.argmax().item()
+            best_score = scores[best_idx].item()
+
+            if best_score >= threshold:
+                matches.append({
+                    'nombre_cliente': batch[j],
+                    'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
+                    'codart': ramedicas_df.iloc[best_idx]['codart'],
+                    'score': best_score
+                })
+            else:
+                matches.append({
+                    'nombre_cliente': batch[j],
+                    'nombre_ramedicas': "No encontrado",
+                    'codart': None,
+                    'score': best_score
+                })
     return matches
 
 # Encabezado
@@ -159,3 +158,4 @@ if uploaded_file or client_names_manual:
 
 else:
     st.warning("Por favor sube un archivo o ingresa nombres manualmente.")
+
