@@ -1,5 +1,3 @@
-# Código optimizado y mejorado para la aplicación de Streamlit
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -45,7 +43,7 @@ def to_excel(df):
     return output.getvalue()
 
 # Generar coincidencias
-def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, threshold=0.5):
+def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model):
     client_name_processed = preprocess_name(client_name)
     client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
 
@@ -54,7 +52,7 @@ def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, thre
     best_idx = scores.argmax().item()
     best_score = scores[best_idx].item()
 
-    if best_score >= threshold:
+    if best_score == 1.0:  # Umbral fijo en 1.0
         return {
             'nombre_cliente': client_name,
             'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
@@ -97,11 +95,6 @@ else:
 
 # Barra lateral
 st.sidebar.header("Opciones")
-threshold = st.sidebar.slider(
-    "Umbral de similitud (0.0 - 1.0)", min_value=0.0, max_value=1.0, value=0.5, step=0.01
-)
-
-# Actualizar base de datos
 if st.sidebar.button("Actualizar base de datos"):
     st.cache_data.clear()
     st.experimental_rerun()
@@ -131,7 +124,7 @@ if uploaded_file or client_names_manual:
 
     # Calcular coincidencias
     matches = [
-        find_best_match(name, ramedicas_df, ramedicas_embeddings, model, threshold)
+        find_best_match(name, ramedicas_df, ramedicas_embeddings, model)
         for name in client_names
     ]
 
