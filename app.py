@@ -3,11 +3,12 @@ import pandas as pd
 from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import torch
+import numpy as np
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Homologador Rápido",
-    page_icon="⚡",
+    page_title="Homologador Inteligente",
+    page_icon="🤖",
     layout="wide"
 )
 
@@ -21,8 +22,8 @@ def load_ramedicas_data():
 
 # Cargar modelo con caché
 @st.cache_resource
-def load_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+def load_model(model_name='all-MiniLM-L6-v2'):
+    return SentenceTransformer(model_name)
 
 # Preprocesar nombres
 def preprocess_name(name):
@@ -33,7 +34,9 @@ def preprocess_name(name):
         "-": " ",
         ",": "",
         ".": "",
-        "x": " x "  # Mejor separación de 'x' como delimitador
+        "x": " x ",  # Mejor separación de 'x' como delimitador
+        "medicamento": "",
+        "generico": ""
     }
     for key, val in replacements.items():
         name = name.replace(key, val)
@@ -46,32 +49,26 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name="Homologación")
     return output.getvalue()
 
-# Buscar la mejor coincidencia
-def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, threshold=0.7):
+# Buscar mejores coincidencias
+def find_best_matches(client_name, ramedicas_df, ramedicas_embeddings, model, top_n=3):
     client_name_processed = preprocess_name(client_name)
     client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(client_embedding, ramedicas_embeddings)[0]
-    best_idx = scores.argmax().item()
-    best_score = scores[best_idx].item()
-
-    if best_score >= threshold:
-        return {
+    top_indices = torch.topk(scores, k=top_n).indices.tolist()
+    matches = []
+    for idx in top_indices:
+        matches.append({
             'nombre_cliente': client_name,
-            'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
-            'codart': ramedicas_df.iloc[best_idx]['codart'],
-            'score': best_score
-        }
-    else:
-        return {
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': "No encontrado",
-            'codart': None,
-            'score': best_score
-        }
+            'nombre_ramedicas': ramedicas_df.iloc[idx]['nomart'],
+            'codart': ramedicas_df.iloc[idx]['codart'],
+            'score': scores[idx].item()
+        })
+    return matches
 
 # Cargar datos y modelo
 ramedicas_df = load_ramedicas_data()
-model = load_model()
+model_name = st.selectbox("Selecciona el modelo:", ["all-MiniLM-L6-v2", "all-mpnet-base-v2"])
+model = load_model(model_name)
 
 # Precalcular embeddings de RAMEDICAS
 ramedicas_embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
@@ -80,8 +77,8 @@ ramedicas_embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), c
 st.markdown(
     """
     <h1 style="text-align: center; color: #FF5800;">RAMEDICAS S.A.S.</h1>
-    <h3 style="text-align: center; color: #3A86FF;">Homologador Optimizado</h3>
-    <p style="text-align: center; color: #6B6B6B;">Resultados rápidos con tecnología avanzada.</p>
+    <h3 style="text-align: center; color: #3A86FF;">Homologador Inteligente</h3>
+    <p style="text-align: center; color: #6B6B6B;">Resultados más precisos con tecnología avanzada.</p>
     """,
     unsafe_allow_html=True
 )
@@ -106,12 +103,12 @@ if uploaded_file or client_names_manual:
     client_names = [name.strip() for name in client_names if name.strip()]
 
     st.info("Procesando... Por favor, espera.")
-    matches = [
-        find_best_match(name, ramedicas_df, ramedicas_embeddings, model)
-        for name in client_names
-    ]
+    all_matches = []
+    for name in client_names:
+        matches = find_best_matches(name, ramedicas_df, ramedicas_embeddings, model)
+        all_matches.extend(matches)
 
-    results_df = pd.DataFrame(matches)
+    results_df = pd.DataFrame(all_matches)
     st.dataframe(results_df)
 
     if not results_df.empty:
@@ -119,6 +116,6 @@ if uploaded_file or client_names_manual:
         st.download_button(
             label="📥 Descargar resultados en Excel",
             data=excel_data,
-            file_name="homologacion_resultados.xlsx",
+            file_name="homologacion_resultados_inteligente.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
