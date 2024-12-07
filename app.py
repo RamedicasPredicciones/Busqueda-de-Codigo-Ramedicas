@@ -3,7 +3,6 @@ import pandas as pd
 from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import torch
-import numpy as np
 
 # Configuración de la página
 st.set_page_config(
@@ -34,7 +33,7 @@ def preprocess_name(name):
         "-": " ",
         ",": "",
         ".": "",
-        "x": " x ",  # Mejor separación de 'x' como delimitador
+        "x": " x ",
         "medicamento": "",
         "generico": ""
     }
@@ -49,21 +48,23 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name="Homologación")
     return output.getvalue()
 
-# Buscar mejores coincidencias
-def find_best_matches(client_name, ramedicas_df, ramedicas_embeddings, model, top_n=3):
-    client_name_processed = preprocess_name(client_name)
-    client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
-    scores = util.pytorch_cos_sim(client_embedding, ramedicas_embeddings)[0]
-    top_indices = torch.topk(scores, k=top_n).indices.tolist()
-    matches = []
-    for idx in top_indices:
-        matches.append({
-            'nombre_cliente': client_name,
-            'nombre_ramedicas': ramedicas_df.iloc[idx]['nomart'],
-            'codart': ramedicas_df.iloc[idx]['codart'],
-            'score': scores[idx].item()
-        })
-    return matches
+# Buscar mejores coincidencias usando procesamiento por lotes
+def find_best_matches_batch(client_names, ramedicas_df, ramedicas_embeddings, model, top_n=3):
+    client_names_processed = [preprocess_name(name) for name in client_names]
+    client_embeddings = model.encode(client_names_processed, convert_to_tensor=True)
+    scores = util.pytorch_cos_sim(client_embeddings, ramedicas_embeddings)  # Matriz de similitudes
+    top_indices = torch.topk(scores, k=top_n, dim=1).indices.tolist()
+
+    all_matches = []
+    for i, name in enumerate(client_names):
+        for idx in top_indices[i]:
+            all_matches.append({
+                'nombre_cliente': name,
+                'nombre_ramedicas': ramedicas_df.iloc[idx]['nomart'],
+                'codart': ramedicas_df.iloc[idx]['codart'],
+                'score': scores[i, idx].item()
+            })
+    return all_matches
 
 # Cargar datos y modelo
 ramedicas_df = load_ramedicas_data()
@@ -103,10 +104,7 @@ if uploaded_file or client_names_manual:
     client_names = [name.strip() for name in client_names if name.strip()]
 
     st.info("Procesando... Por favor, espera.")
-    all_matches = []
-    for name in client_names:
-        matches = find_best_matches(name, ramedicas_df, ramedicas_embeddings, model)
-        all_matches.extend(matches)
+    all_matches = find_best_matches_batch(client_names, ramedicas_df, ramedicas_embeddings, model)
 
     results_df = pd.DataFrame(all_matches)
     st.dataframe(results_df)
