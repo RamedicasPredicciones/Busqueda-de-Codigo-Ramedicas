@@ -11,15 +11,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cargar datos con caché
-@st.cache_data
+# Cargar datos sin caché
 def load_ramedicas_data():
     url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
     df = pd.read_excel(url)
     df['nomart_processed'] = df['nomart'].apply(preprocess_name)
     return df[['codart', 'nomart', 'nomart_processed']]
 
-# Cargar modelo con caché
+# Cargar modelo con caché (esto puede permanecer en caché porque no depende de la base de datos)
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -90,6 +89,7 @@ def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, thre
         }
 
 # Cargar datos y modelo
+st.info("Cargando datos, por favor espera...")
 ramedicas_df = load_ramedicas_data()
 model = load_model()
 
