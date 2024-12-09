@@ -11,7 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cargar datos con caché
 @st.cache_data
 def load_ramedicas_data():
     url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
@@ -19,12 +18,10 @@ def load_ramedicas_data():
     df['nomart_processed'] = df['nomart'].apply(preprocess_name)
     return df[['codart', 'nomart', 'nomart_processed', 'nomb_fami']]
 
-# Cargar modelo con caché
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
-# Preprocesar nombres
 def preprocess_name(name):
     name = str(name).lower()
     replacements = {
@@ -33,52 +30,31 @@ def preprocess_name(name):
         "-": " ",
         ",": "",
         ".": "",
-        "x": " x "  # Mejor separación de 'x' como delimitador
+        "x": " x "
     }
     for key, val in replacements.items():
         name = name.replace(key, val)
     return " ".join(name.split())
 
-# Convertir DataFrame a archivo Excel para descarga
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Homologación")
     return output.getvalue()
 
-# Calcular puntuación personalizada
-def calculate_custom_score(client_name, ramedicas_name):
-    client_terms = set(client_name.split())
-    ramedicas_terms = set(ramedicas_name.split())
-
-    # Penalizar combinaciones adicionales
-    extra_terms = len(ramedicas_terms - client_terms)
-    match_terms = len(client_terms & ramedicas_terms)
-
-    return match_terms - extra_terms  # Mayor puntuación para coincidencias exactas
-
-# Buscar la mejor coincidencia
 def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, threshold=0.7):
     client_name_processed = preprocess_name(client_name)
     client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
 
-    # Similaridad de embeddings
     scores = util.pytorch_cos_sim(client_embedding, ramedicas_embeddings)[0]
     best_idx = scores.argmax().item()
     best_score = scores[best_idx].item()
 
-    # Calcular puntuación personalizada
-    custom_scores = ramedicas_df['nomart_processed'].apply(
-        lambda x: calculate_custom_score(client_name_processed, x)
-    )
-    best_custom_idx = custom_scores.idxmax()
-
-    # Decidir mejor resultado basado en el umbral
     if best_score >= threshold:
         return {
             'nombre_cliente': client_name,
-            'nombre_ramedicas': ramedicas_df.iloc[best_custom_idx]['nomart'],
-            'codart': ramedicas_df.iloc[best_custom_idx]['codart'],
+            'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
+            'codart': ramedicas_df.iloc[best_idx]['codart'],
             'score': best_score
         }
     else:
@@ -89,93 +65,54 @@ def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, thre
             'score': best_score
         }
 
-# Cargar datos y modelo
 ramedicas_df = load_ramedicas_data()
 model = load_model()
-
-# Precalcular embeddings de RAMEDICAS
 ramedicas_embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), convert_to_tensor=True)
 
-# Interfaz de usuario
 st.markdown(
     """
     <h1 style="text-align: center; color: #FF5800;">RAMEDICAS S.A.S.</h1>
     <h3 style="text-align: center; color: #3A86FF;">Homologador Inteligente</h3>
-    <p style="text-align: center; color: #6B6B6B;">Resultados rápidos con tecnología avanzada.</p>
     """,
     unsafe_allow_html=True
 )
 
-# Entrada de opción
 option = st.radio("Selecciona la opción que deseas usar:", ["Opción 1: Solo nombre", "Opción 2: Nombre y laboratorio"])
 
 if option == "Opción 1: Solo nombre":
-    uploaded_file = st.file_uploader("Sube tu archivo Excel con la columna 'nombre':", type="xlsx")
-    client_names_manual = st.text_area("Ingresa los nombres manualmente, separados por saltos de línea:")
-
-    if uploaded_file or client_names_manual:
-        client_names = []
-
-        if uploaded_file:
-            client_names_df = pd.read_excel(uploaded_file)
-            if 'nombre' not in client_names_df.columns:
-                st.error("El archivo debe tener una columna llamada 'nombre'.")
-            else:
-                client_names = client_names_df['nombre'].tolist()
-
-        if client_names_manual:
-            client_names.extend(client_names_manual.split("\n"))
-
-        client_names = [name.strip() for name in client_names if name.strip()]
-
-        st.info("Procesando... Por favor, espera.")
-        matches = [
-            find_best_match(name, ramedicas_df, ramedicas_embeddings, model)
-            for name in client_names
-        ]
-
-        results_df = pd.DataFrame(matches)
+    client_name = st.text_input("Ingresa el nombre del producto:")
+    
+    if client_name:
+        match = find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model)
+        results_df = pd.DataFrame([match])
         st.dataframe(results_df)
 
-        if not results_df.empty:
+        excel_data = to_excel(results_df)
+        st.download_button(
+            label="📥 Descargar resultados en Excel",
+            data=excel_data,
+            file_name="homologacion_resultados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+elif option == "Opción 2: Nombre y laboratorio":
+    client_name = st.text_input("Ingresa el nombre del producto:")
+    lab_name = st.text_input("Ingresa el laboratorio:")
+
+    if client_name and lab_name:
+        filtered_df = ramedicas_df[ramedicas_df['nomb_fami'].str.contains(lab_name, case=False, na=False)]
+        if not filtered_df.empty:
+            filtered_embeddings = model.encode(filtered_df['nomart_processed'].tolist(), convert_to_tensor=True)
+            match = find_best_match(client_name, filtered_df, filtered_embeddings, model)
+            results_df = pd.DataFrame([match])
+            st.dataframe(results_df)
+
             excel_data = to_excel(results_df)
             st.download_button(
                 label="📥 Descargar resultados en Excel",
                 data=excel_data,
-                file_name="homologacion_resultados.xlsx",
+                file_name="homologacion_resultados_filtrado.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-elif option == "Opción 2: Nombre y laboratorio":
-    uploaded_file = st.file_uploader("Sube tu archivo Excel con las columnas 'nombre' y 'laboratorio':", type="xlsx")
-
-    if uploaded_file:
-        client_names_df = pd.read_excel(uploaded_file)
-
-        if 'nombre' not in client_names_df.columns or 'laboratorio' not in client_names_df.columns:
-            st.error("El archivo debe tener las columnas 'nombre' y 'laboratorio'.")
         else:
-            client_names = client_names_df['nombre'].tolist()
-            laboratories = client_names_df['laboratorio'].tolist()
-
-            st.info("Procesando... Por favor, espera.")
-            filtered_df = ramedicas_df[ramedicas_df['nomb_fami'].isin(laboratories)]
-
-            filtered_embeddings = model.encode(filtered_df['nomart_processed'].tolist(), convert_to_tensor=True)
-
-            matches = [
-                find_best_match(name, filtered_df, filtered_embeddings, model)
-                for name in client_names
-            ]
-
-            results_df = pd.DataFrame(matches)
-            st.dataframe(results_df)
-
-            if not results_df.empty:
-                excel_data = to_excel(results_df)
-                st.download_button(
-                    label="📥 Descargar resultados en Excel",
-                    data=excel_data,
-                    file_name="homologacion_resultados_filtrado.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            st.warning("No se encontraron productos para el laboratorio ingresado.")
