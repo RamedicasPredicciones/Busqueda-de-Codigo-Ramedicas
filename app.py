@@ -6,7 +6,7 @@ import torch
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Homologador Rápido",
+    page_title="Homologador Inteligente",
     page_icon="⚡",
     layout="wide"
 )
@@ -28,8 +28,8 @@ def load_model():
 def preprocess_name(name):
     name = str(name).lower()
     replacements = {
-        "+": " ",
-        "/": " ",
+        "+": " + ",
+        "/": " + ",
         "-": " ",
         ",": "",
         ".": "",
@@ -46,19 +46,39 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name="Homologación")
     return output.getvalue()
 
+# Calcular puntuación personalizada
+def calculate_custom_score(client_name, ramedicas_name):
+    client_terms = set(client_name.split())
+    ramedicas_terms = set(ramedicas_name.split())
+
+    # Penalizar combinaciones adicionales
+    extra_terms = len(ramedicas_terms - client_terms)
+    match_terms = len(client_terms & ramedicas_terms)
+
+    return match_terms - extra_terms  # Mayor puntuación para coincidencias exactas
+
 # Buscar la mejor coincidencia
 def find_best_match(client_name, ramedicas_df, ramedicas_embeddings, model, threshold=0.7):
     client_name_processed = preprocess_name(client_name)
     client_embedding = model.encode(client_name_processed, convert_to_tensor=True)
+
+    # Similaridad de embeddings
     scores = util.pytorch_cos_sim(client_embedding, ramedicas_embeddings)[0]
     best_idx = scores.argmax().item()
     best_score = scores[best_idx].item()
 
+    # Calcular puntuación personalizada
+    custom_scores = ramedicas_df['nomart_processed'].apply(
+        lambda x: calculate_custom_score(client_name_processed, x)
+    )
+    best_custom_idx = custom_scores.idxmax()
+
+    # Decidir mejor resultado basado en el umbral
     if best_score >= threshold:
         return {
             'nombre_cliente': client_name,
-            'nombre_ramedicas': ramedicas_df.iloc[best_idx]['nomart'],
-            'codart': ramedicas_df.iloc[best_idx]['codart'],
+            'nombre_ramedicas': ramedicas_df.iloc[best_custom_idx]['nomart'],
+            'codart': ramedicas_df.iloc[best_custom_idx]['codart'],
             'score': best_score
         }
     else:
@@ -80,7 +100,7 @@ ramedicas_embeddings = model.encode(ramedicas_df['nomart_processed'].tolist(), c
 st.markdown(
     """
     <h1 style="text-align: center; color: #FF5800;">RAMEDICAS S.A.S.</h1>
-    <h3 style="text-align: center; color: #3A86FF;">Homologador Optimizado</h3>
+    <h3 style="text-align: center; color: #3A86FF;">Homologador Inteligente</h3>
     <p style="text-align: center; color: #6B6B6B;">Resultados rápidos con tecnología avanzada.</p>
     """,
     unsafe_allow_html=True
@@ -106,6 +126,9 @@ if uploaded_file or client_names_manual:
     client_names = [name.strip() for name in client_names if name.strip()]
 
     st.info("Procesando... Por favor, espera.")
+    # Calcular embeddings de los nombres del cliente en lote
+    client_embeddings = model.encode(client_names, convert_to_tensor=True)
+
     matches = [
         find_best_match(name, ramedicas_df, ramedicas_embeddings, model)
         for name in client_names
